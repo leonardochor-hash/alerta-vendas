@@ -22,6 +22,9 @@ MIN_SIMULADA  = os.environ.get("MIN_SIMULADA", "")
 
 CONTADOR_FILE = "contadores.json"
 
+# Valor minimo para a transacao ser considerada como venda valida
+VALOR_MINIMO = 80.0
+
 LOJAS = {
     "1": "Rio Sul",
     "3": "Barra Shopping",
@@ -68,15 +71,16 @@ def login():
         print(f"ERRO login: {e}")
         return False
 
-# ─── Busca vendas de uma loja nos ultimos N minutos ───────────────
+# ─── Busca vendas nos ultimos 60 minutos ─────────────────────────
 def buscar_vendas_recentes(data_str, hora_inicio, minuto_inicio, hora_fim, minuto_fim):
     """
-    Busca TODAS as transacoes succeeded do dia.
-    Retorna dict {loja_id: (total_valor, count)} filtrando pela janela de tempo.
-    
+    Busca transacoes succeeded do dia, filtrando pela janela de tempo
+    e apenas transacoes com valor_op > VALOR_MINIMO.
+
     Estrutura da tabela:
-    - Linha 17 colunas: col[0]=seq, col[1]=loja_id (ou "Total"), col[2]=cod_auth,
-                        col[3]=data_hora, col[4]=valor, col[5]=valor_op
+    - Linha 17 colunas: col[0]=seq, col[1]=loja_id (ou "Total"),
+                        col[2]=cod_auth, col[3]=data_hora,
+                        col[4]=valor, col[5]=valor_op
     - Linha 16 colunas: col[0]=seq, col[1]=cod_auth, col[2]=data_hora,
                         col[3]=valor, col[4]=valor_op
     current_loja so muda quando linha tem 17 colunas E col[1] nao e "Total"
@@ -107,8 +111,7 @@ def buscar_vendas_recentes(data_str, hora_inicio, minuto_inicio, hora_fim, minut
                 data_hora = cells[3].get_text(strip=True)
                 valor_op  = cells[5].get_text(strip=True)
             elif len(cells) == 16:
-                loja_candidata = cells[1].get_text(strip=True)
-                if loja_candidata == "Total":
+                if cells[1].get_text(strip=True) == "Total":
                     continue
                 data_hora = cells[2].get_text(strip=True)
                 valor_op  = cells[4].get_text(strip=True)
@@ -131,6 +134,10 @@ def buscar_vendas_recentes(data_str, hora_inicio, minuto_inicio, hora_fim, minut
 
             try:
                 valor = float(valor_op.replace(",", "."))
+                # Apenas transacoes acima do valor minimo
+                if valor <= VALOR_MINIMO:
+                    print(f"  [ignorado] {current_loja} R$ {valor:.2f} <= R$ {VALOR_MINIMO:.2f}")
+                    continue
                 resultado[current_loja]["total"] += valor
                 resultado[current_loja]["count"] += 1
             except:
@@ -212,15 +219,15 @@ def main():
 
     data_str = agora_br.strftime("%d/%m/%Y")
 
-    # Janela: ultimos 30 minutos
-    inicio = agora_br - timedelta(minutes=30)
+    # Janela: ultima hora (roda de hora em hora no minuto 00)
+    inicio = agora_br - timedelta(hours=1)
     hora_ini = inicio.hour
     min_ini  = inicio.minute
     if inicio.date() < agora_br.date():
         hora_ini = 0
         min_ini  = 0
 
-    print(f"Verificando vendas: {data_str} {hora_ini:02d}:{min_ini:02d} ate {hora_atual:02d}:{min_atual:02d}")
+    print(f"Verificando vendas > R$ {VALOR_MINIMO:.0f}: {data_str} {hora_ini:02d}:{min_ini:02d} ate {hora_atual:02d}:{min_atual:02d}")
 
     if not login():
         print("ERRO: Login falhou. Abortando.")
@@ -232,35 +239,33 @@ def main():
     for loja_id, loja_nome in LOJAS.items():
         total = vendas[loja_id]["total"]
         count = vendas[loja_id]["count"]
-        print(f"{loja_nome} (loja {loja_id}): {count} transacoes | R$ {total:.2f} nos ultimos 30min")
+        print(f"{loja_nome} (loja {loja_id}): {count} vendas validas | R$ {total:.2f} na ultima hora")
 
         chave = f"alerta_{loja_id}"
-        if count == 0 and total == 0.0:
+        if count == 0:
             contadores[chave] = contadores.get(chave, 0) + 1
             qtd = contadores[chave]
-            minutos_sem_venda = qtd * 30
+            horas_sem_venda = qtd
             instrucao = INSTRUCOES[min(qtd - 1, len(INSTRUCOES) - 1)]
 
-            if minutos_sem_venda < 60:
-                tempo_str = f"{minutos_sem_venda} minutos"
+            if horas_sem_venda == 1:
+                tempo_str = "1 hora"
             else:
-                horas = minutos_sem_venda // 60
-                mins  = minutos_sem_venda % 60
-                tempo_str = f"{horas}h{mins:02d}min" if mins > 0 else f"{horas} hora{'s' if horas > 1 else ''}"
+                tempo_str = f"{horas_sem_venda} horas"
 
             assunto = f"ALERTA [{loja_nome}] Sem vendas ha {tempo_str} (alerta #{qtd})"
             corpo = (
                 f"ALERTA DE INATIVIDADE DE VENDAS\n"
                 f"{'=' * 45}\n"
                 f"Loja:             {loja_nome}\n"
-                f"Sem vendas ha:    {tempo_str}\n"
+                f"Sem vendas ha:    {tempo_str} (vendas > R$ {VALOR_MINIMO:.0f})\n"
                 f"Numero do alerta: #{qtd}\n"
                 f"Horario:          {data_str} {hora_atual:02d}:{min_atual:02d}\n"
                 f"{'=' * 45}\n"
                 f"\nACAO NECESSARIA:\n{instrucao}\n"
                 f"\nFavor verificar imediatamente!\n"
             )
-            print(f"  -> ALERTA #{qtd}: {loja_nome} sem vendas ha {tempo_str}")
+            print(f"  -> ALERTA #{qtd}: {loja_nome} sem vendas validas ha {tempo_str}")
             enviar_email(assunto, corpo, montar_html(corpo))
         else:
             if contadores.get(chave, 0) > 0:
