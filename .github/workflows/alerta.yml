@@ -2,11 +2,12 @@ name: Alerta Inatividade Vendas
 
 on:
   schedule:
-    - cron: "0,30 10-22 * * *"
+    - cron: "0,30 14-23 * * *"
+    - cron: "0,30 0-1 * * *"
   workflow_dispatch:
     inputs:
       hora_simulada:
-        description: "Hora simulada (ex: 13)"
+        description: "Hora simulada BRT (ex: 13)"
         required: false
         default: ""
       data_simulada:
