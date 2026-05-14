@@ -2,8 +2,8 @@ name: Alerta Inatividade Vendas
 
 on:
   schedule:
-    - cron: "0,30 14-23 * * *"
-    - cron: "0,30 0-1 * * *"
+    - cron: "0 14-23 * * *"
+    - cron: "0 0-1 * * *"
   workflow_dispatch:
     inputs:
       hora_simulada:
@@ -15,7 +15,7 @@ on:
         required: false
         default: ""
       min_simulada:
-        description: "Minuto simulado (ex: 30)"
+        description: "Minuto simulado (ex: 00)"
         required: false
         default: ""
 
