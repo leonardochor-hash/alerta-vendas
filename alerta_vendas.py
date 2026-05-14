@@ -71,19 +71,16 @@ def login():
         print(f"ERRO login: {e}")
         return False
 
-# ─── Busca vendas nos ultimos 60 minutos ─────────────────────────
-def buscar_vendas_recentes(data_str, hora_inicio, minuto_inicio, hora_fim, minuto_fim):
+# ─── Busca vendas na hora anterior completa ───────────────────────
+def buscar_vendas_hora_anterior(data_str, hora_atual):
     """
-    Busca transacoes succeeded do dia, filtrando pela janela de tempo
-    e apenas transacoes com valor_op > VALOR_MINIMO.
+    Verifica se houve venda valida (valor > VALOR_MINIMO) na hora anterior.
+    Ex: hora_atual=18 -> verifica vendas entre 17:00 e 17:59.
+    Retorna (total_valor, count_transacoes_validas).
 
     Estrutura da tabela:
-    - Linha 17 colunas: col[0]=seq, col[1]=loja_id (ou "Total"),
-                        col[2]=cod_auth, col[3]=data_hora,
-                        col[4]=valor, col[5]=valor_op
-    - Linha 16 colunas: col[0]=seq, col[1]=cod_auth, col[2]=data_hora,
-                        col[3]=valor, col[4]=valor_op
-    current_loja so muda quando linha tem 17 colunas E col[1] nao e "Total"
+    - Linha 17 colunas: col[1]=loja_id (ou "Total"), col[3]=data_hora, col[5]=valor_op
+    - Linha 16 colunas: col[1]=cod_auth, col[2]=data_hora, col[4]=valor_op
     """
     data_enc = data_str + " - " + data_str
     params = {
@@ -95,8 +92,9 @@ def buscar_vendas_recentes(data_str, hora_inicio, minuto_inicio, hora_fim, minut
         "TransacaoPosSearch[id_zoop]": "",
     }
     resultado = {loja_id: {"total": 0.0, "count": 0} for loja_id in LOJAS}
-    inicio_min = hora_inicio * 60 + minuto_inicio
-    fim_min    = hora_fim    * 60 + minuto_fim
+    hora_ref = hora_atual - 1   # hora anterior
+    inicio_min = hora_ref * 60
+    fim_min    = hora_atual * 60  # exclusive: pega 17:00 ate 17:59
 
     try:
         r = session.get(MOOMBOX_URL + "/zoop/financeiro", params=params, timeout=30)
@@ -121,7 +119,7 @@ def buscar_vendas_recentes(data_str, hora_inicio, minuto_inicio, hora_fim, minut
             if current_loja not in LOJAS:
                 continue
 
-            # Filtrar janela de tempo
+            # Filtrar hora anterior (17:00 ate 17:59)
             try:
                 partes = data_hora.split(" ")[1].split(":")
                 h = int(partes[0])
@@ -134,9 +132,7 @@ def buscar_vendas_recentes(data_str, hora_inicio, minuto_inicio, hora_fim, minut
 
             try:
                 valor = float(valor_op.replace(",", "."))
-                # Apenas transacoes acima do valor minimo
                 if valor <= VALOR_MINIMO:
-                    print(f"  [ignorado] {current_loja} R$ {valor:.2f} <= R$ {VALOR_MINIMO:.2f}")
                     continue
                 resultado[current_loja]["total"] += valor
                 resultado[current_loja]["count"] += 1
@@ -200,7 +196,7 @@ def normalizar_hora(h_str):
 
 def main():
     if DATA_SIMULADA:
-        hora_str = normalizar_hora(HORA_SIMULADA) if HORA_SIMULADA else "13:00"
+        hora_str = normalizar_hora(HORA_SIMULADA) if HORA_SIMULADA else "12:00"
         agora_br = datetime.strptime(DATA_SIMULADA + " " + hora_str, "%d/%m/%Y %H:%M")
         if MIN_SIMULADA:
             agora_br = agora_br.replace(minute=int(MIN_SIMULADA.strip()))
@@ -211,66 +207,60 @@ def main():
 
     hora_atual = agora_br.hour
     min_atual  = agora_br.minute
+    data_str   = agora_br.strftime("%d/%m/%Y")
 
     # Horario comercial: 11h-22h
     if not (11 <= hora_atual <= 22):
         print(f"Fora do horario comercial ({hora_atual}h). Nada enviado.")
         return
 
-    data_str = agora_br.strftime("%d/%m/%Y")
+    # As 11h e o inicio do dia: zera todos os contadores
+    if hora_atual == 11:
+        print(f"Inicio do dia comercial (11h). Zerando contadores.")
+        contadores = {f"alerta_{loja_id}": 0 for loja_id in LOJAS}
+        salvar_contadores(contadores)
+        print("Contadores zerados:", contadores)
+        return
 
-    # Janela: ultima hora (roda de hora em hora no minuto 00)
-    inicio = agora_br - timedelta(hours=1)
-    hora_ini = inicio.hour
-    min_ini  = inicio.minute
-    if inicio.date() < agora_br.date():
-        hora_ini = 0
-        min_ini  = 0
-
-    print(f"Verificando vendas > R$ {VALOR_MINIMO:.0f}: {data_str} {hora_ini:02d}:{min_ini:02d} ate {hora_atual:02d}:{min_atual:02d}")
+    hora_ref = hora_atual - 1
+    print(f"Verificando vendas > R$ {VALOR_MINIMO:.0f}: {data_str} {hora_ref:02d}:00 ate {hora_ref:02d}:59")
 
     if not login():
         print("ERRO: Login falhou. Abortando.")
         return
 
-    vendas = buscar_vendas_recentes(data_str, hora_ini, min_ini, hora_atual, min_atual)
+    vendas    = buscar_vendas_hora_anterior(data_str, hora_atual)
     contadores = carregar_contadores()
 
     for loja_id, loja_nome in LOJAS.items():
         total = vendas[loja_id]["total"]
         count = vendas[loja_id]["count"]
-        print(f"{loja_nome} (loja {loja_id}): {count} vendas validas | R$ {total:.2f} na ultima hora")
+        print(f"{loja_nome} (loja {loja_id}): {count} vendas validas | R$ {total:.2f} entre {hora_ref:02d}:00 e {hora_ref:02d}:59")
 
         chave = f"alerta_{loja_id}"
         if count == 0:
+            # Sem venda valida na hora anterior: incrementa e envia
             contadores[chave] = contadores.get(chave, 0) + 1
             qtd = contadores[chave]
-            horas_sem_venda = qtd
             instrucao = INSTRUCOES[min(qtd - 1, len(INSTRUCOES) - 1)]
 
-            if horas_sem_venda == 1:
-                tempo_str = "1 hora"
-            else:
-                tempo_str = f"{horas_sem_venda} horas"
-
-            assunto = f"ALERTA [{loja_nome}] Sem vendas ha {tempo_str} (alerta #{qtd})"
+            assunto = f"ALERTA [{loja_nome}] Sem vendas as {hora_ref:02d}h (alerta #{qtd} hoje)"
             corpo = (
                 f"ALERTA DE INATIVIDADE DE VENDAS\n"
                 f"{'=' * 45}\n"
                 f"Loja:             {loja_nome}\n"
-                f"Sem vendas ha:    {tempo_str} (vendas > R$ {VALOR_MINIMO:.0f})\n"
-                f"Numero do alerta: #{qtd}\n"
-                f"Horario:          {data_str} {hora_atual:02d}:{min_atual:02d}\n"
+                f"Hora verificada:  {hora_ref:02d}:00 - {hora_ref:02d}:59\n"
+                f"Sem vendas > R$ {VALOR_MINIMO:.0f}\n"
+                f"Alertas hoje:     #{qtd}\n"
+                f"Horario:          {data_str} {hora_atual:02d}:00\n"
                 f"{'=' * 45}\n"
                 f"\nACAO NECESSARIA:\n{instrucao}\n"
                 f"\nFavor verificar imediatamente!\n"
             )
-            print(f"  -> ALERTA #{qtd}: {loja_nome} sem vendas validas ha {tempo_str}")
+            print(f"  -> ALERTA #{qtd} hoje: {loja_nome} sem vendas validas entre {hora_ref:02d}:00 e {hora_ref:02d}:59")
             enviar_email(assunto, corpo, montar_html(corpo))
         else:
-            if contadores.get(chave, 0) > 0:
-                print(f"  -> {loja_nome} voltou a vender! Resetando contador (estava em {contadores[chave]}).")
-            contadores[chave] = 0
+            print(f"  -> {loja_nome} OK. Contador do dia permanece em {contadores.get(chave, 0)}.")
 
     salvar_contadores(contadores)
     print("Contadores:", contadores)
