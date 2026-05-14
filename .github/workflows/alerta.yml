@@ -2,10 +2,11 @@ name: Alerta Inatividade Vendas
 
 on:
   schedule:
-    # Seg a Sab: 11h-22h BRT = 14h-23h UTC + 00h-01h UTC
+    # Seg a Sab: 11h-22h BRT = 14h-23h UTC
     - cron: "0 14-23 * * 1-6"
-    - cron: "0 0-1 * * 2-7"
-    # Domingo: 14h-21h BRT = 17h-00h UTC
+    # Seg a Sab: 00h e 01h UTC = 21h e 22h BRT
+    - cron: "0 0-1 * * 2-6"
+    # Dom: 14h-21h BRT = 17h-00h UTC
     - cron: "0 17-23 * * 0"
     - cron: "0 0 * * 1"
   workflow_dispatch:
@@ -15,7 +16,7 @@ on:
         required: false
         default: ""
       data_simulada:
-        description: "Data simulada (ex: 14/05/2026)"
+        description: "Data simulada (ex: 17/05/2026)"
         required: false
         default: ""
       min_simulada:
