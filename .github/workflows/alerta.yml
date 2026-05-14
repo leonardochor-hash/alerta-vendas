@@ -1,0 +1,58 @@
+name: Alerta Inatividade Vendas
+
+on:
+  schedule:
+    - cron: "0,30 10-22 * * *"
+  workflow_dispatch:
+    inputs:
+      hora_simulada:
+        description: "Hora simulada (ex: 13)"
+        required: false
+        default: ""
+      data_simulada:
+        description: "Data simulada (ex: 14/05/2026)"
+        required: false
+        default: ""
+      min_simulada:
+        description: "Minuto simulado (ex: 30)"
+        required: false
+        default: ""
+
+jobs:
+  alertar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install requests beautifulsoup4 pytz
+
+      - name: Baixar contadores anteriores
+        uses: actions/download-artifact@v4
+        with:
+          name: contadores
+          path: .
+        continue-on-error: true
+
+      - name: Executar alerta
+        run: python alerta_vendas.py
+        env:
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          EMAIL_REMETENTE: cap00leonardo@gmail.com
+          EMAIL_DESTINATARIO: leonardochor@gmail.com
+          HORA_SIMULADA: ${{ github.event.inputs.hora_simulada }}
+          DATA_SIMULADA: ${{ github.event.inputs.data_simulada }}
+          MIN_SIMULADA: ${{ github.event.inputs.min_simulada }}
+
+      - name: Salvar contadores
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: contadores
+          path: contadores.json
+          overwrite: true
+          retention-days: 7
