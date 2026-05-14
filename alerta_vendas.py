@@ -21,9 +21,7 @@ HORA_SIMULADA = os.environ.get("HORA_SIMULADA", "")
 MIN_SIMULADA  = os.environ.get("MIN_SIMULADA", "")
 
 CONTADOR_FILE = "contadores.json"
-
-# Valor minimo para a transacao ser considerada como venda valida
-VALOR_MINIMO = 80.0
+VALOR_MINIMO  = 80.0
 
 LOJAS = {
     "1": "Rio Sul",
@@ -38,6 +36,36 @@ INSTRUCOES = [
     "Entre em contato com a equipe da loja imediatamente.",
     "Verifique se ha problema tecnico no sistema de vendas.",
 ]
+
+# ─── Feriados nacionais brasileiros 2026 ─────────────────────────
+# Adicione ou remova datas no formato "DD/MM/YYYY"
+FERIADOS = {
+    "01/01/2026",  # Confraternizacao Universal
+    "16/02/2026",  # Carnaval (segunda)
+    "17/02/2026",  # Carnaval (terca)
+    "03/04/2026",  # Sexta-feira Santa
+    "05/04/2026",  # Pascoa
+    "21/04/2026",  # Tiradentes
+    "01/05/2026",  # Dia do Trabalho
+    "11/06/2026",  # Corpus Christi
+    "07/09/2026",  # Independencia do Brasil
+    "12/10/2026",  # Nossa Senhora Aparecida
+    "02/11/2026",  # Finados
+    "15/11/2026",  # Proclamacao da Republica
+    "20/11/2026",  # Consciencia Negra
+    "25/12/2026",  # Natal
+}
+
+# ─── Horario por tipo de dia ──────────────────────────────────────
+# Segunda a Sabado: 11h-22h  (hora_inicio=11, hora_fim=22)
+# Domingo e Feriados: 14h-21h (hora_inicio=14, hora_fim=21)
+# "inicio do dia" = primeira hora de funcionamento (contador zera)
+
+def get_horario(data_str, weekday):
+    """Retorna (hora_inicio, hora_fim) conforme dia da semana e feriados."""
+    if data_str in FERIADOS or weekday == 6:  # 6 = domingo
+        return 14, 21
+    return 11, 22
 
 # ─── Sessao HTTP ──────────────────────────────────────────────────
 def make_session():
@@ -74,13 +102,8 @@ def login():
 # ─── Busca vendas na hora anterior completa ───────────────────────
 def buscar_vendas_hora_anterior(data_str, hora_atual):
     """
-    Verifica se houve venda valida (valor > VALOR_MINIMO) na hora anterior.
-    Ex: hora_atual=18 -> verifica vendas entre 17:00 e 17:59.
-    Retorna (total_valor, count_transacoes_validas).
-
-    Estrutura da tabela:
-    - Linha 17 colunas: col[1]=loja_id (ou "Total"), col[3]=data_hora, col[5]=valor_op
-    - Linha 16 colunas: col[1]=cod_auth, col[2]=data_hora, col[4]=valor_op
+    Verifica vendas validas (valor > VALOR_MINIMO) na hora anterior.
+    Ex: hora_atual=18 -> verifica 17:00 ate 17:59.
     """
     data_enc = data_str + " - " + data_str
     params = {
@@ -91,10 +114,10 @@ def buscar_vendas_hora_anterior(data_str, hora_atual):
         "TransacaoPosSearch[entry_mode]": "",
         "TransacaoPosSearch[id_zoop]": "",
     }
-    resultado = {loja_id: {"total": 0.0, "count": 0} for loja_id in LOJAS}
-    hora_ref = hora_atual - 1   # hora anterior
-    inicio_min = hora_ref * 60
-    fim_min    = hora_atual * 60  # exclusive: pega 17:00 ate 17:59
+    resultado   = {loja_id: {"total": 0.0, "count": 0} for loja_id in LOJAS}
+    hora_ref    = hora_atual - 1
+    inicio_min  = hora_ref    * 60
+    fim_min     = hora_atual  * 60
 
     try:
         r = session.get(MOOMBOX_URL + "/zoop/financeiro", params=params, timeout=30)
@@ -119,7 +142,6 @@ def buscar_vendas_hora_anterior(data_str, hora_atual):
             if current_loja not in LOJAS:
                 continue
 
-            # Filtrar hora anterior (17:00 ate 17:59)
             try:
                 partes = data_hora.split(" ")[1].split(":")
                 h = int(partes[0])
@@ -206,17 +228,23 @@ def main():
         agora_br = datetime.now(tz_br).replace(tzinfo=None)
 
     hora_atual = agora_br.hour
-    min_atual  = agora_br.minute
     data_str   = agora_br.strftime("%d/%m/%Y")
+    weekday    = agora_br.weekday()  # 0=seg, 5=sab, 6=dom
 
-    # Horario comercial: 11h-22h
-    if not (11 <= hora_atual <= 22):
-        print(f"Fora do horario comercial ({hora_atual}h). Nada enviado.")
+    DIAS_SEMANA = ["Segunda", "Terca", "Quarta", "Quinta", "Sexta", "Sabado", "Domingo"]
+    tipo_dia = "Feriado" if data_str in FERIADOS else DIAS_SEMANA[weekday]
+    hora_inicio, hora_fim = get_horario(data_str, weekday)
+
+    print(f"Data: {data_str} ({tipo_dia}) | Horario: {hora_inicio}h-{hora_fim}h | Hora atual: {hora_atual}h")
+
+    # Verificar se esta dentro do horario de funcionamento
+    if not (hora_inicio <= hora_atual <= hora_fim):
+        print(f"Fora do horario de funcionamento. Nada enviado.")
         return
 
-    # As 11h e o inicio do dia: zera todos os contadores
-    if hora_atual == 11:
-        print(f"Inicio do dia comercial (11h). Zerando contadores.")
+    # Primeira hora do dia (hora_inicio): zera contadores
+    if hora_atual == hora_inicio:
+        print(f"Inicio do dia comercial ({hora_inicio}h). Zerando contadores.")
         contadores = {f"alerta_{loja_id}": 0 for loja_id in LOJAS}
         salvar_contadores(contadores)
         print("Contadores zerados:", contadores)
@@ -229,7 +257,7 @@ def main():
         print("ERRO: Login falhou. Abortando.")
         return
 
-    vendas    = buscar_vendas_hora_anterior(data_str, hora_atual)
+    vendas     = buscar_vendas_hora_anterior(data_str, hora_atual)
     contadores = carregar_contadores()
 
     for loja_id, loja_nome in LOJAS.items():
@@ -239,7 +267,6 @@ def main():
 
         chave = f"alerta_{loja_id}"
         if count == 0:
-            # Sem venda valida na hora anterior: incrementa e envia
             contadores[chave] = contadores.get(chave, 0) + 1
             qtd = contadores[chave]
             instrucao = INSTRUCOES[min(qtd - 1, len(INSTRUCOES) - 1)]
@@ -252,7 +279,7 @@ def main():
                 f"Hora verificada:  {hora_ref:02d}:00 - {hora_ref:02d}:59\n"
                 f"Sem vendas > R$ {VALOR_MINIMO:.0f}\n"
                 f"Alertas hoje:     #{qtd}\n"
-                f"Horario:          {data_str} {hora_atual:02d}:00\n"
+                f"Horario:          {data_str} ({tipo_dia}) {hora_atual:02d}:00\n"
                 f"{'=' * 45}\n"
                 f"\nACAO NECESSARIA:\n{instrucao}\n"
                 f"\nFavor verificar imediatamente!\n"
