@@ -63,8 +63,8 @@ FERIADOS = {
 # ─── Horario por tipo de dia ──────────────────────────────────────
 def get_horario(data_str, weekday):
         if data_str in FERIADOS or weekday == 6:
-                    return 14, 21
-                return 11, 22
+        return 14, 21
+    return 11, 22
 
 # ─── Config de premios ────────────────────────────────────────────
 def carregar_config():
@@ -330,6 +330,18 @@ else:
 
     if not (hora_inicio <= hora_atual < hora_fim) and not (hora_atual == hora_fim and agora_br.minute != 0):
                 print("Fora do horario de funcionamento. Nada enviado.")
+        return
+
+    # Aviso 15 minutos antes do encerramento do periodo
+    modo_aviso_fim = (agora_br.minute == 45 and hora_atual == hora_fim - 1)
+    if modo_aviso_fim:
+        for loja_id, loja_nome in LOJAS.items():
+            assunto = f"[AVISO ENCERRAMENTO] {loja_nome} - 15 min para fechar"
+            corpo = (f"AVISO DE ENCERRAMENTO\n"
+                     f"A loja {loja_nome} tem 15 min ate o fim do periodo ({hora_fim}h).\n"
+                     f"Prepare a equipe para fechar as vendas do dia!")
+            enviar_email(assunto, corpo)
+        print("Aviso de encerramento enviado para todas as lojas.")
         return
 
     # Primeira hora do dia: zera contadores
