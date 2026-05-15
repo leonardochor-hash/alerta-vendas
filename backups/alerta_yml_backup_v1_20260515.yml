@@ -1,0 +1,97 @@
+undefinedname: Alerta Inatividade Vendas
+
+on:
+  schedule:
+    # Seg a Sab: 11h-22h BRT = 14h-23h UTC
+    - cron: "0 14-23 * * 1-6"
+    # Seg a Sab: 00h e 01h UTC = 21h e 22h BRT
+    - cron: "0 0-1 * * 2-6"
+    # Dom: 14h-21h BRT = 17h-00h UTC
+    - cron: "0 17-23 * * 0"
+    - cron: "0 0 * * 1"
+    # Aviso 15min antes do encerramento: 21h45 BRT = 00h45 UTC (seg-sex)
+    - cron: "45 0 * * 2-6"
+    # Aviso 15min antes dom: 20h45 BRT = 23h45 UTC
+    - cron: "45 23 * * 0"
+  workflow_dispatch:
+    inputs:
+      hora_simulada:
+        description: "Hora simulada BRT (ex: 18)"
+        required: false
+        default: ""
+      data_simulada:
+        description: "Data simulada (ex: 17/05/2026)"
+        required: false
+        default: ""
+      min_simulada:
+        description: "Minuto simulado (ex: 00)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  alertar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install requests beautifulsoup4 pytz
+
+      - name: Baixar contadores anteriores
+        uses: actions/download-artifact@v4
+        with:
+          name: contadores
+          path: .
+        continue-on-error: true
+
+      - name: Baixar historico anterior
+        uses: actions/download-artifact@v4
+        with:
+          name: historico
+          path: .
+        continue-on-error: true
+
+      - name: Executar alerta
+        run: python alerta_vendas.py
+        env:
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          EMAIL_REMETENTE: cap00leonardo@gmail.com
+          EMAIL_DESTINATARIO: leonardochor@gmail.com
+          HORA_SIMULADA: ${{ github.event.inputs.hora_simulada }}
+          DATA_SIMULADA: ${{ github.event.inputs.data_simulada }}
+          MIN_SIMULADA: ${{ github.event.inputs.min_simulada }}
+
+      - name: Salvar contadores
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: contadores
+          path: contadores.json
+          overwrite: true
+
+      - name: Salvar historico como artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: historico
+          path: historico.json
+          overwrite: true
+
+      - name: Publicar historico.json no repositorio
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin main || true
+          git add -f historico.json || true
+          git diff --staged --quiet || git commit -m "chore: atualiza historico.json [skip ci]"
+          git push origin main || true
