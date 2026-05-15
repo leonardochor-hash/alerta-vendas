@@ -28,6 +28,9 @@ on:
         required: false
         default: ""
 
+permissions:
+  contents: write
+
 jobs:
   alertar:
     runs-on: ubuntu-latest
@@ -48,6 +51,13 @@ jobs:
           path: .
         continue-on-error: true
 
+      - name: Baixar historico anterior
+        uses: actions/download-artifact@v4
+        with:
+          name: historico
+          path: .
+        continue-on-error: true
+
       - name: Executar alerta
         run: python alerta_vendas.py
         env:
@@ -65,4 +75,20 @@ jobs:
           name: contadores
           path: contadores.json
           overwrite: true
-          retention-days: 7
+
+      - name: Salvar historico como artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: historico
+          path: historico.json
+          overwrite: true
+
+      - name: Publicar historico.json no repositorio
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f historico.json || true
+          git diff --staged --quiet || git commit -m "chore: atualiza historico.json [skip ci]"
+          git push
