@@ -61,7 +61,7 @@ jobs:
       - name: Executar alerta
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_PASS: ${{ secrets.GMAIL_APP_PASSWORD }}
           EMAIL_DEST: ${{ secrets.EMAIL_DEST }}
           CALLMEBOT_USER: ${{ secrets.CALLMEBOT_USER }}
           CALLMEBOT_KEY: ${{ secrets.CALLMEBOT_KEY }}
