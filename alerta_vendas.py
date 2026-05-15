@@ -430,6 +430,15 @@ def main():
             enviar_whatsapp(msg_wpp)
             registrar_alerta_historico(historico, data_str, hora_ref, loja_id)
         else:
+            # Loja vendeu - limpa alerta do historico se estava marcado falsamente
+            hora_str_ref = f"{hora_ref:02d}:00"
+            if data_str in historico and loja_id in historico.get(data_str, {}):
+                if hora_str_ref in historico[data_str][loja_id]:
+                    historico[data_str][loja_id].remove(hora_str_ref)
+                    if not historico[data_str][loja_id]:
+                        del historico[data_str][loja_id]
+                    if not historico.get(data_str):
+                        del historico[data_str]
             saldo_atual, _, _ = calcular_saldo(config, loja_id, data_str)
             print(f" -> {loja_nome} OK. Contador permanece em {contadores.get(chave, 0)}. Premio: R$ {saldo_atual:.2f}")
 
