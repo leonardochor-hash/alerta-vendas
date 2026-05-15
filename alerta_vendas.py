@@ -25,6 +25,7 @@ HORA_SIMULADA = os.environ.get("HORA_SIMULADA", "")
 MIN_SIMULADA  = os.environ.get("MIN_SIMULADA",  "")
 
 CONTADOR_FILE = "contadores.json"
+HISTORICO_FILE = "historico.json"
 CONFIG_FILE   = "config.json"
 
 VALOR_MINIMO = 1.0
@@ -267,6 +268,28 @@ def salvar_contadores(contadores):
     with open(CONTADOR_FILE, "w") as f:
         json.dump(contadores, f, indent=2)
 
+def carregar_historico():
+    if os.path.exists(HISTORICO_FILE):
+        try:
+            with open(HISTORICO_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+def salvar_historico(historico):
+    with open(HISTORICO_FILE, "w", encoding="utf-8") as f:
+        json.dump(historico, f, indent=2, ensure_ascii=False)
+
+def registrar_alerta_historico(historico, data_str, hora_ref, loja_id):
+    if data_str not in historico:
+        historico[data_str] = {}
+    if loja_id not in historico[data_str]:
+        historico[data_str][loja_id] = []
+    hora_str = f"{hora_ref:02d}:00"
+    if hora_str not in historico[data_str][loja_id]:
+        historico[data_str][loja_id].append(hora_str)
+
 # ─── Email ────────────────────────────────────────────
 def enviar_email(assunto, corpo, html=None):
     if not GMAIL_APP_PASSWORD:
@@ -372,6 +395,7 @@ def main():
     vendas     = buscar_vendas_hora_anterior(data_str, hora_atual)
     contadores = carregar_contadores()
     config     = carregar_config()
+    historico  = carregar_historico()
 
     for loja_id, loja_nome in LOJAS.items():
         total = vendas[loja_id]["total"]
@@ -415,11 +439,13 @@ def main():
             print(f" -> ALERTA #{qtd} hoje: {loja_nome} | Premio: R$ {novo_saldo:.2f}")
             enviar_email(assunto, corpo, montar_html(corpo))
             enviar_whatsapp(msg_wpp)
+            registrar_alerta_historico(historico, data_str, hora_ref, loja_id)
         else:
             saldo_atual, _, _ = calcular_saldo(config, loja_id, data_str)
             print(f" -> {loja_nome} OK. Contador permanece em {contadores.get(chave, 0)}. Premio: R$ {saldo_atual:.2f}")
 
     salvar_contadores(contadores)
+    salvar_historico(historico)
     salvar_config(config)
     print("Contadores:", contadores)
 
