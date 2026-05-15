@@ -328,7 +328,7 @@ else:
 
     print(f"Data: {data_str} ({tipo_dia}) | Horario: {hora_inicio}h-{hora_fim}h | Hora atual: {hora_atual}h")
 
-    if not (hora_inicio <= hora_atual <= hora_fim):
+    if not (hora_inicio <= hora_atual < hora_fim) and not (hora_atual == hora_fim and agora_br.minute != 0):
                 print("Fora do horario de funcionamento. Nada enviado.")
         return
 
