@@ -128,7 +128,16 @@ def descontar_premio(config, loja_id, data_str):
     Desconta perda_por_alerta do saldo_atual da loja.
     Retorna novo saldo.
     """
-    loja_cfg         = config["lojas"].get(loja_id, {})
+    # Garante que a entrada da loja existe no config
+    if loja_id not in config["lojas"]:
+        config["lojas"][loja_id] = {
+            "nome": LOJAS.get(loja_id, loja_id),
+            "premio_inicial": 500.0,
+            "perda_por_alerta": 50.0,
+            "saldo_atual": 500.0,
+            "ciclo_inicio": data_str
+        }
+    loja_cfg         = config["lojas"][loja_id]
     perda            = loja_cfg.get("perda_por_alerta", 50.0)
     saldo_atual, _, _ = calcular_saldo(config, loja_id, data_str)
     novo_saldo       = max(0.0, saldo_atual - perda)
@@ -424,14 +433,14 @@ def main():
             assunto = f"ALERTA [{loja_nome}] Sem vendas as {hora_ref:02d}h (alerta #{qtd} hoje)"
             corpo = (
                 f"ALERTA DE INATIVIDADE DE VENDAS\n"
-                + ("=" * 45 + "\n")
-                + f"Loja: {loja_nome}\n"
-                + f"Hora verificada: {hora_ref:02d}:00 - {hora_ref:02d}:59\n"
-                + f"Sem vendas > R$ {VALOR_MINIMO:.0f} nesse periodo\n"
-                + f"Alertas hoje: #{qtd}\n"
-                + ("=" * 45 + "\n")
-                + f"{linha_premio}"
-                + f"Acao recomendada: {instrucao}\n"
+                ("=" * 45 + "\n")
+                f"Loja: {loja_nome}\n"
+                f"Hora verificada: {hora_ref:02d}:00 - {hora_ref:02d}:59\n"
+                f"Sem vendas > R$ {VALOR_MINIMO:.0f} nesse periodo\n"
+                f"Alertas hoje: #{qtd}\n"
+                ("=" * 45 + "\n")
+                f"{linha_premio}"
+                f"Acao recomendada: {instrucao}\n"
             )
 
             msg_wpp = f"ALERTA #{qtd} hoje: {loja_nome} | Premio: R$ {novo_saldo:.2f}"
