@@ -9,6 +9,10 @@ on:
     # Dom: 14h-21h BRT = 17h-00h UTC
     - cron: "0 17-23 * * 0"
     - cron: "0 0 * * 1"
+    # Aviso 15min antes do encerramento: 21h45 BRT = 00h45 UTC (seg-sex)
+    - cron: "45 0 * * 2-6"
+    # Aviso 15min antes dom: 20h45 BRT = 23h45 UTC
+    - cron: "45 23 * * 0"
   workflow_dispatch:
     inputs:
       hora_simulada:
