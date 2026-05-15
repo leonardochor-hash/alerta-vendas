@@ -48,4 +48,4 @@ Monitor de inatividade de vendas das lojas Moombox. Roda a cada 30 minutos e env
 
 ## Horario de funcionamento
 
-Das **10h00 as 22h59** (horario de Brasilia). Fora desse horario nenhum alerta e enviado.
+Das **10h00 as 22h00** (horario de Brasilia). Fora desse horario nenhum alerta e enviado.
