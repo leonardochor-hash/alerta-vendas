@@ -12,9 +12,9 @@ MOOMBOX_URL = "https://expositores.moombox.com.br"
 USUARIO     = "moombox"
 SENHA       = "admin2020b"
 
-EMAIL_REMETENTE    = os.environ.get("EMAIL_REMETENTE",    "cap00leonardo@gmail.com")
-EMAIL_DESTINATARIO = os.environ.get("EMAIL_DESTINATARIO", "leonardochor@gmail.com")
-GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
+EMAIL_REMETENTE    = os.environ.get("EMAIL_USER",  "cap00leonardo@gmail.com")
+EMAIL_DESTINATARIO = os.environ.get("EMAIL_DEST", "leonardochor@gmail.com")
+GMAIL_APP_PASSWORD = os.environ.get("EMAIL_PASS", "")
 
 # WhatsApp via CallMeBot (opcional - deixe em branco para desativar)
 WHATSAPP_NUMERO  = os.environ.get("WHATSAPP_NUMERO",  "5521992971444")
@@ -28,12 +28,12 @@ CONTADOR_FILE = "contadores.json"
 HISTORICO_FILE = "historico.json"
 CONFIG_FILE   = "config.json"
 
-VALOR_MINIMO = 1.0
+VALOR_MINIMO = 80.0
 
 LOJAS = {
     "1": "Rio Sul",
-    "2": "Barra Shopping",
-    "3": "NorteShopping",
+    "3": "Barra Shopping",
+    "4": "NorteShopping",
 }
 
 INSTRUCOES = [
