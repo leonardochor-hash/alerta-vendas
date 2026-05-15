@@ -424,14 +424,14 @@ def main():
             assunto = f"ALERTA [{loja_nome}] Sem vendas as {hora_ref:02d}h (alerta #{qtd} hoje)"
             corpo = (
                 f"ALERTA DE INATIVIDADE DE VENDAS\n"
-                ("=" * 45 + "\n")
-                f"Loja: {loja_nome}\n"
-                f"Hora verificada: {hora_ref:02d}:00 - {hora_ref:02d}:59\n"
-                f"Sem vendas > R$ {VALOR_MINIMO:.0f} nesse periodo\n"
-                f"Alertas hoje: #{qtd}\n"
-                ("=" * 45 + "\n")
-                f"{linha_premio}"
-                f"Acao recomendada: {instrucao}\n"
+                + ("=" * 45 + "\n")
+                + f"Loja: {loja_nome}\n"
+                + f"Hora verificada: {hora_ref:02d}:00 - {hora_ref:02d}:59\n"
+                + f"Sem vendas > R$ {VALOR_MINIMO:.0f} nesse periodo\n"
+                + f"Alertas hoje: #{qtd}\n"
+                + ("=" * 45 + "\n")
+                + f"{linha_premio}"
+                + f"Acao recomendada: {instrucao}\n"
             )
 
             msg_wpp = f"ALERTA #{qtd} hoje: {loja_nome} | Premio: R$ {novo_saldo:.2f}"
