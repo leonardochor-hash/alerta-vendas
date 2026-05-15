@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard Alertas - Moombox</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e0e0e0; min-height: 100vh; }
+header { background: linear-gradient(135deg, #1a1d2e, #252840); padding: 18px 30px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #3a3f6e; }
+header h1 { font-size: 1.4rem; color: #7b9ef7; letter-spacing: 1px; }
+header .sub { font-size: 0.82rem; color: #9a9db8; margin-top: 2px; }
+header .data-hora { font-size: 0.85rem; color: #9a9db8; text-align: right; }
+.container { max-width: 1200px; margin: 28px auto; padding: 0 20px; }
+.section-title { font-size: 0.85rem; color: #9a9db8; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 14px; padding-bottom: 7px; border-bottom: 1px solid #3a3f6e; display: flex; align-items: center; gap: 8px; }
+.section-title .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot-blue { background: #7b9ef7; }
+.dot-orange { background: #f07070; }
+
+/* RESUMO CARDS */
+.resumo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin-bottom: 32px; }
+.loja-card { background: linear-gradient(145deg, #1e2136, #252840); border-radius: 14px; padding: 22px 24px; border: 1px solid #3a3f6e; }
+.loja-card h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 2px; color: #7b9ef7; margin-bottom: 14px; }
+.stats-row { display: flex; gap: 12px; }
+.stat-box { flex: 1; background: rgba(0,0,0,0.2); border-radius: 10px; padding: 12px 14px; border: 1px solid #2a2f52; text-align: center; }
+.stat-box .val { font-size: 2rem; font-weight: 700; line-height: 1; }
+.stat-box .lab { font-size: 0.7rem; color: #9a9db8; text-transform: uppercase; letter-spacing: 1px; margin-top: 5px; }
+.val-zero { color: #4caf7d; }
+.val-low { color: #d4a840; }
+.val-med { color: #e07040; }
+.val-high { color: #f05050; }
+
+/* HISTORICO */
+.historico-section { margin-bottom: 32px; }
+.loja-historico { background: #1e2136; border-radius: 14px; border: 1px solid #3a3f6e; margin-bottom: 18px; overflow: hidden; }
+.loja-historico-header { background: #252840; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
+.loja-historico-header h4 { font-size: 0.85rem; font-weight: 600; color: #c0c8f0; text-transform: uppercase; letter-spacing: 1px; }
+.nav-dias { display: flex; gap: 6px; flex-wrap: wrap; }
+.nav-dia-btn { background: #1e2136; border: 1px solid #3a3f6e; color: #9a9db8; padding: 4px 10px; border-radius: 6px; font-size: 0.72rem; cursor: pointer; transition: all 0.2s; }
+.nav-dia-btn:hover { background: #2a2f52; color: #e0e0e0; }
+.nav-dia-btn.active { background: #7b9ef7; border-color: #7b9ef7; color: #0f1117; font-weight: 700; }
+.loja-historico-body { padding: 16px 20px; min-height: 60px; }
+.horas-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.hora-badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; background: #3a1a1a; color: #f07070; border: 1px solid #6e2a2a; }
+.hora-badge::before { content: '\26A0'; font-size: 0.7rem; }
+.sem-alerta { font-size: 0.82rem; color: #4caf7d; display: flex; align-items: center; gap: 6px; }
+.sem-alerta::before { content: '\2713'; font-size: 1rem; }
+.sem-dado { font-size: 0.82rem; color: #5a5f7e; font-style: italic; }
+.loading { color: #9a9db8; font-style: italic; font-size: 0.85rem; }
+.erro { color: #f07070; font-size: 0.85rem; }
+
+/* LEGENDA */
+.legenda { background: #1a1d2e; border: 1px solid #3a3f6e; border-radius: 10px; padding: 12px 18px; margin-bottom: 24px; font-size: 0.8rem; color: #9a9db8; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.legenda span { display: flex; align-items: center; gap: 5px; }
+footer { text-align: center; padding: 20px; color: #5a5f7e; font-size: 0.78rem; border-top: 1px solid #2a2f52; margin-top: 10px; }
+@media (max-width: 600px) { header h1 { font-size: 1.1rem; } .stats-row { flex-direction: column; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>&#128202; Dashboard de Alertas</h1>
+    <div class="sub">Moombox &mdash; Monitoramento de Inatividade</div>
+  </div>
+  <div class="data-hora" id="data-hora"></div>
+</header>
+
+<div class="container">
+
+  <!-- RESUMO DO DIA E SEMANA -->
+  <div class="section-title"><span class="dot dot-blue"></span>Resumo de Notificacoes</div>
+  <div class="resumo-grid" id="resumo-grid">
+    <div class="loading">Carregando dados...</div>
+  </div>
+
+  <div class="legenda">
+    <span>&#128308; 0 alertas: Perfeito</span>
+    <span>&#128993; 1-2 alertas: Atencao</span>
+    <span>&#128992; 3-4 alertas: Critico</span>
+    <span>&#128308; 5+ alertas: Emergencia</span>
+  </div>
+
+  <!-- HISTORICO POR LOJA -->
+  <div class="section-title" style="margin-top:8px;"><span class="dot dot-orange"></span>Historico de Alertas por Loja</div>
+  <div class="historico-section" id="historico-section">
+    <div class="loading">Carregando historico...</div>
+  </div>
+
+</div>
+
+<footer>Atualizado automaticamente a cada hora &bull; Moombox Alerta de Vendas v2</footer>
+
+<script>
+const LOJAS = { "1": "Rio Sul", "2": "Barra Shopping", "3": "NorteShopping" };
+const HISTORICO_URL = '../historico.json';
+
+// ── Helpers ──────────────────────────────────────────────────────
+function hoje() {
+  // BRT = UTC-3
+  const now = new Date();
+  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  return brt.toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
+function dataHojeBRT() {
+  const now = new Date();
+  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  return brt;
+}
+
+function yyyymmddParaDisplayBR(yyyymmdd) {
+  if (!yyyymmdd) return '';
+  const [y, m, d] = yyyymmdd.split('-');
+  return d + '/' + m + '/' + y;
+}
+
+function ddmmyyyyParaYYYYMMDD(ddmmyyyy) {
+  if (!ddmmyyyy) return '';
+  const [d, m, y] = ddmmyyyy.split('/');
+  return y + '-' + m + '-' + d;
+}
+
+function yyyymmddParaDDMMYYYY(yyyymmdd) {
+  if (!yyyymmdd) return '';
+  const [y, m, d] = yyyymmdd.split('-');
+  return d + '/' + m + '/' + y;
+}
+
+function diaSemanaBR(yyyymmdd) {
+  const dias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+  const d = new Date(yyyymmdd + 'T12:00:00');
+  return dias[d.getDay()];
+}
+
+function getCorVal(n) {
+  if (n === 0) return 'val-zero';
+  if (n <= 2) return 'val-low';
+  if (n <= 4) return 'val-med';
+  return 'val-high';
+}
+
+// Retorna os 7 dias mais recentes com dados OU os 7 ultimos dias corridos
+function calcularSemana(historico) {
+  const brt = dataHojeBRT();
+  const dias = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(brt);
+    d.setDate(d.getDate() - i);
+    dias.push(d.toISOString().split('T')[0]);
+  }
+  return dias;
+}
+
+// ── Relógio ──────────────────────────────────────────────────────
+function atualizarRelogio() {
+  const brt = dataHojeBRT();
+  const opts = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+  const data = brt.toLocaleDateString('pt-BR', opts);
+  const hora = brt.toLocaleTimeString('pt-BR');
+  document.getElementById('data-hora').innerHTML = data + '<br>' + hora + ' (BRT)';
+}
+setInterval(atualizarRelogio, 1000);
+atualizarRelogio();
+
+// ── Estado ───────────────────────────────────────────────────────
+let _historico = {};
+// diaAtivo por loja: lojaId -> yyyymmdd
+const _diaAtivo = {};
+
+// ── Renderizacao ─────────────────────────────────────────────────
+function alertasDia(lojaId, yyyymmdd) {
+  const ddmm = yyyymmddParaDDMMYYYY(yyyymmdd);
+  const diaData = _historico[ddmm];
+  if (!diaData) return [];
+  return diaData[lojaId] || [];
+}
+
+function alertasSemana(lojaId, diasSemana) {
+  return diasSemana.reduce((acc, d) => acc + alertasDia(lojaId, d).length, 0);
+}
+
+function renderResumo(diasSemana) {
+  const hojeStr = dias => dias[dias.length - 1];
+  const hj = hojeStr(diasSemana);
+  const grid = document.getElementById('resumo-grid');
+  grid.innerHTML = '';
+  for (const [lojaId, lojaNome] of Object.entries(LOJAS)) {
+    const qtdHoje = alertasDia(lojaId, hj).length;
+    const qtdSemana = alertasSemana(lojaId, diasSemana);
+    const card = document.createElement('div');
+    card.className = 'loja-card';
+    card.innerHTML = `
+      <h3>${lojaNome}</h3>
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="val ${getCorVal(qtdHoje)}">${qtdHoje}</div>
+          <div class="lab">Alertas hoje</div>
+        </div>
+        <div class="stat-box">
+          <div class="val ${getCorVal(qtdSemana)}">${qtdSemana}</div>
+          <div class="lab">Na semana</div>
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+}
+
+function renderHistorico(diasSemana) {
+  const sec = document.getElementById('historico-section');
+  sec.innerHTML = '';
+  for (const [lojaId, lojaNome] of Object.entries(LOJAS)) {
+    const div = document.createElement('div');
+    div.className = 'loja-historico';
+    div.id = 'hist-loja-' + lojaId;
+
+    // Montar botoes de navegacao
+    const btnHtml = diasSemana.map(d => {
+      const ativo = (_diaAtivo[lojaId] || diasSemana[diasSemana.length-1]) === d;
+      const label = diaSemanaBR(d) + ' ' + yyyymmddParaDisplayBR(d);
+      return `<button class="nav-dia-btn ${ativo ? 'active' : ''}" onclick="selecionarDia('${lojaId}', '${d}')">${label}</button>`;
+    }).join('');
+
+    div.innerHTML = `
+      <div class="loja-historico-header">
+        <h4>${lojaNome}</h4>
+        <div class="nav-dias">${btnHtml}</div>
+      </div>
+      <div class="loja-historico-body" id="body-loja-${lojaId}">
+        ${renderBodyLoja(lojaId, _diaAtivo[lojaId] || diasSemana[diasSemana.length-1])}
+      </div>
+    `;
+    sec.appendChild(div);
+  }
+}
+
+function renderBodyLoja(lojaId, yyyymmdd) {
+  const horas = alertasDia(lojaId, yyyymmdd);
+  const ddmm = yyyymmddParaDDMMYYYY(yyyymmdd);
+  const diaExiste = _historico[ddmm] !== undefined;
+
+  if (!diaExiste) {
+    return `<div class="sem-dado">Sem dados registrados para ${yyyymmddParaDisplayBR(yyyymmdd)}</div>`;
+  }
+  if (horas.length === 0) {
+    return `<div class="sem-alerta">Nenhum alerta neste dia &mdash; ${yyyymmddParaDisplayBR(yyyymmdd)}</div>`;
+  }
+  const badgesHtml = horas.sort().map(h => `<span class="hora-badge">${h}</span>`).join('');
+  return `<div class="horas-grid">${badgesHtml}</div>`;
+}
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard Alertas - Moombox</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e0e0e0; min-height: 100vh; }
+header { background: linear-gradient(135deg, #1a1d2e, #252840); padding: 18px 30px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #3a3f6e; }
+header h1 { font-size: 1.4rem; color: #7b9ef7; letter-spacing: 1px; }
+header .sub { font-size: 0.82rem; color: #9a9db8; margin-top: 2px; }
+header .data-hora { font-size: 0.85rem; color: #9a9db8; text-align: right; }
+.container { max-width: 1200px; margin: 28px auto; padding: 0 20px; }
+.section-title { font-size: 0.85rem; color: #9a9db8; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 14px; padding-bottom: 7px; border-bottom: 1px solid #3a3f6e; display: flex; align-items: center; gap: 8px; }
+.section-title .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot-blue { background: #7b9ef7; }
+.dot-orange { background: #f07070; }
+
+/* RESUMO CARDS */
+.resumo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin-bottom: 32px; }
+.loja-card { background: linear-gradient(145deg, #1e2136, #252840); border-radius: 14px; padding: 22px 24px; border: 1px solid #3a3f6e; }
+.loja-card h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 2px; color: #7b9ef7; margin-bottom: 14px; }
+.stats-row { display: flex; gap: 12px; }
+.stat-box { flex: 1; background: rgba(0,0,0,0.2); border-radius: 10px; padding: 12px 14px; border: 1px solid #2a2f52; text-align: center; }
+.stat-box .val { font-size: 2rem; font-weight: 700; line-height: 1; }
+.stat-box .lab { font-size: 0.7rem; color: #9a9db8; text-transform: uppercase; letter-spacing: 1px; margin-top: 5px; }
+.val-zero { color: #4caf7d; }
+.val-low { color: #d4a840; }
+.val-med { color: #e07040; }
+.val-high { color: #f05050; }
+
+/* HISTORICO */
+.historico-section { margin-bottom: 32px; }
+.loja-historico { background: #1e2136; border-radius: 14px; border: 1px solid #3a3f6e; margin-bottom: 18px; overflow: hidden; }
+.loja-historico-header { background: #252840; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
+.loja-historico-header h4 { font-size: 0.85rem; font-weight: 600; color: #c0c8f0; text-transform: uppercase; letter-spacing: 1px; }
+.nav-dias { display: flex; gap: 6px; flex-wrap: wrap; }
+.nav-dia-btn { background: #1e2136; border: 1px solid #3a3f6e; color: #9a9db8; padding: 4px 10px; border-radius: 6px; font-size: 0.72rem; cursor: pointer; transition: all 0.2s; }
+.nav-dia-btn:hover { background: #2a2f52; color: #e0e0e0; }
+.nav-dia-btn.active { background: #7b9ef7; border-color: #7b9ef7; color: #0f1117; font-weight: 700; }
+.loja-historico-body { padding: 16px 20px; min-height: 60px; }
+.horas-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.hora-badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; background: #3a1a1a; color: #f07070; border: 1px solid #6e2a2a; }
+.hora-badge::before { content: '\26A0'; font-size: 0.7rem; }
+.sem-alerta { font-size: 0.82rem; color: #4caf7d; display: flex; align-items: center; gap: 6px; }
+.sem-alerta::before { content: '\2713'; font-size: 1rem; }
+.sem-dado { font-size: 0.82rem; color: #5a5f7e; font-style: italic; }
+.loading { color: #9a9db8; font-style: italic; font-size: 0.85rem; }
+.erro { color: #f07070; font-size: 0.85rem; }
+
+/* LEGENDA */
+.legenda { background: #1a1d2e; border: 1px solid #3a3f6e; border-radius: 10px; padding: 12px 18px; margin-bottom: 24px; font-size: 0.8rem; color: #9a9db8; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.legenda span { display: flex; align-items: center; gap: 5px; }
+footer { text-align: center; padding: 20px; color: #5a5f7e; font-size: 0.78rem; border-top: 1px solid #2a2f52; margin-top: 10px; }
+@media (max-width: 600px) { header h1 { font-size: 1.1rem; } .stats-row { flex-direction: column; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>&#128202; Dashboard de Alertas</h1>
+    <div class="sub">Moombox &mdash; Monitoramento de Inatividade</div>
+  </div>
+  <div class="data-hora" id="data-hora"></div>
+</header>
+
+<div class="container">
+
+  <!-- RESUMO DO DIA E SEMANA -->
+  <div class="section-title"><span class="dot dot-blue"></span>Resumo de Notificacoes</div>
+  <div class="resumo-grid" id="resumo-grid">
+    <div class="loading">Carregando dados...</div>
+  </div>
+
+  <div class="legenda">
+    <span>&#128308; 0 alertas: Perfeito</span>
+    <span>&#128993; 1-2 alertas: Atencao</span>
+    <span>&#128992; 3-4 alertas: Critico</span>
+    <span>&#128308; 5+ alertas: Emergencia</span>
+  </div>
+
+  <!-- HISTORICO POR LOJA -->
+  <div class="section-title" style="margin-top:8px;"><span class="dot dot-orange"></span>Historico de Alertas por Loja</div>
+  <div class="historico-section" id="historico-section">
+    <div class="loading">Carregando historico...</div>
+  </div>
+
+</div>
+
+<footer>Atualizado automaticamente a cada hora &bull; Moombox Alerta de Vendas v2</footer>
+
+<script>
+const LOJAS = { "1": "Rio Sul", "2": "Barra Shopping", "3": "NorteShopping" };
+const HISTORICO_URL = '../historico.json';
+
+// ── Helpers ──────────────────────────────────────────────────────
+function hoje() {
+  // BRT = UTC-3
+  const now = new Date();
+  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  return brt.toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
+function dataHojeBRT() {
+  const now = new Date();
+  const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  return brt;
+}
+
+function yyyymmddParaDisplayBR(yyyymmdd) {
+  if (!yyyymmdd) return '';
+  const [y, m, d] = yyyymmdd.split('-');
+  return d + '/' + m + '/' + y;
+}
+
+function ddmmyyyyParaYYYYMMDD(ddmmyyyy) {
+  if (!ddmmyyyy) return '';
+  const [d, m, y] = ddmmyyyy.split('/');
+  return y + '-' + m + '-' + d;
+}
+
+function yyyymmddParaDDMMYYYY(yyyymmdd) {
+  if (!yyyymmdd) return '';
+  const [y, m, d] = yyyymmdd.split('-');
+  return d + '/' + m + '/' + y;
+}
+
+function diaSemanaBR(yyyymmdd) {
+  const dias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+  const d = new Date(yyyymmdd + 'T12:00:00');
+  return dias[d.getDay()];
+}
+
+function getCorVal(n) {
+  if (n === 0) return 'val-zero';
+  if (n <= 2) return 'val-low';
+  if (n <= 4) return 'val-med';
+  return 'val-high';
+}
+
+// Retorna os 7 dias mais recentes com dados OU os 7 ultimos dias corridos
+function calcularSemana(historico) {
+  const brt = dataHojeBRT();
+  const dias = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(brt);
+    d.setDate(d.getDate() - i);
+    dias.push(d.toISOString().split('T')[0]);
+  }
+  return dias;
+}
+
+// ── Relógio ──────────────────────────────────────────────────────
+function atualizarRelogio() {
+  const brt = dataHojeBRT();
+  const opts = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+  const data = brt.toLocaleDateString('pt-BR', opts);
+  const hora = brt.toLocaleTimeString('pt-BR');
+  document.getElementById('data-hora').innerHTML = data + '<br>' + hora + ' (BRT)';
+}
+setInterval(atualizarRelogio, 1000);
+atualizarRelogio();
+
+// ── Estado ───────────────────────────────────────────────────────
+let _historico = {};
+// diaAtivo por loja: lojaId -> yyyymmdd
+const _diaAtivo = {};
+
+// ── Renderizacao ─────────────────────────────────────────────────
+function alertasDia(lojaId, yyyymmdd) {
+  const ddmm = yyyymmddParaDDMMYYYY(yyyymmdd);
+  const diaData = _historico[ddmm];
+  if (!diaData) return [];
+  return diaData[lojaId] || [];
+}
+
+function alertasSemana(lojaId, diasSemana) {
+  return diasSemana.reduce((acc, d) => acc + alertasDia(lojaId, d).length, 0);
+}
+
+function renderResumo(diasSemana) {
+  const hojeStr = dias => dias[dias.length - 1];
+  const hj = hojeStr(diasSemana);
+  const grid = document.getElementById('resumo-grid');
+  grid.innerHTML = '';
+  for (const [lojaId, lojaNome] of Object.entries(LOJAS)) {
+    const qtdHoje = alertasDia(lojaId, hj).length;
+    const qtdSemana = alertasSemana(lojaId, diasSemana);
+    const card = document.createElement('div');
+    card.className = 'loja-card';
+    card.innerHTML = `
+      <h3>${lojaNome}</h3>
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="val ${getCorVal(qtdHoje)}">${qtdHoje}</div>
+          <div class="lab">Alertas hoje</div>
+        </div>
+        <div class="stat-box">
+          <div class="val ${getCorVal(qtdSemana)}">${qtdSemana}</div>
+          <div class="lab">Na semana</div>
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+  }
+}
+
+function renderHistorico(diasSemana) {
+  const sec = document.getElementById('historico-section');
+  sec.innerHTML = '';
+  for (const [lojaId, lojaNome] of Object.entries(LOJAS)) {
+    const div = document.createElement('div');
+    div.className = 'loja-historico';
+    div.id = 'hist-loja-' + lojaId;
+
+    // Montar botoes de navegacao
+    const btnHtml = diasSemana.map(d => {
+      const ativo = (_diaAtivo[lojaId] || diasSemana[diasSemana.length-1]) === d;
+      const label = diaSemanaBR(d) + ' ' + yyyymmddParaDisplayBR(d);
+      return `<button class="nav-dia-btn ${ativo ? 'active' : ''}" onclick="selecionarDia('${lojaId}', '${d}')">${label}</button>`;
+    }).join('');
+
+    div.innerHTML = `
+      <div class="loja-historico-header">
+        <h4>${lojaNome}</h4>
+        <div class="nav-dias">${btnHtml}</div>
+      </div>
+      <div class="loja-historico-body" id="body-loja-${lojaId}">
+        ${renderBodyLoja(lojaId, _diaAtivo[lojaId] || diasSemana[diasSemana.length-1])}
+      </div>
+    `;
+    sec.appendChild(div);
+  }
+}
+
+function renderBodyLoja(lojaId, yyyymmdd) {
+  const horas = alertasDia(lojaId, yyyymmdd);
+  const ddmm = yyyymmddParaDDMMYYYY(yyyymmdd);
+  const diaExiste = _historico[ddmm] !== undefined;
+
+  if (!diaExiste) {
+    return `<div class="sem-dado">Sem dados registrados para ${yyyymmddParaDisplayBR(yyyymmdd)}</div>`;
+  }
+  if (horas.length === 0) {
+    return `<div class="sem-alerta">Nenhum alerta neste dia &mdash; ${yyyymmddParaDisplayBR(yyyymmdd)}</div>`;
+  }
+  const badgesHtml = horas.sort().map(h => `<span class="hora-badge">${h}</span>`).join('');
+  return `<div class="horas-grid">${badgesHtml}</div>`;
+}
+
+function selecionarDia(lojaId, yyyymmdd) {
+  _diaAtivo[lojaId] = yyyymmdd;
+  // Atualizar botoes
+  const container = document.getElementById('hist-loja-' + lojaId);
+  container.querySelectorAll('.nav-dia-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.trim().endsWith(yyyymmddParaDisplayBR(yyyymmdd)));
+  });
+  // Atualizar body
+  document.getElementById('body-loja-' + lojaId).innerHTML = renderBodyLoja(lojaId, yyyymmdd);
+}
+
+// ── Carregamento ─────────────────────────────────────────────────
+async function carregarDados() {
+  try {
+    const r = await fetch(HISTORICO_URL + '?t=' + Date.now());
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    _historico = await r.json();
+  } catch (e) {
+    console.error('Erro ao carregar historico.json:', e);
+    document.getElementById('resumo-grid').innerHTML = '<div class="erro">Erro ao carregar dados: ' + e.message + '</div>';
+    document.getElementById('historico-section').innerHTML = '<div class="erro">Verifique se o arquivo historico.json existe e o GitHub Pages esta ativo.</div>';
+    return;
+  }
+
+  const diasSemana = calcularSemana(_historico);
+  // Inicializar dia ativo de cada loja como hoje
+  const hj = diasSemana[diasSemana.length - 1];
+  for (const id of Object.keys(LOJAS)) {
+    if (!_diaAtivo[id]) _diaAtivo[id] = hj;
+  }
+
+  renderResumo(diasSemana);
+  renderHistorico(diasSemana);
+}
+
+carregarDados();
+// Recarregar a cada 5 minutos
+setInterval(carregarDados, 5 * 60 * 1000);
+</script>
+</body>
+</html>
