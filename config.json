@@ -4,24 +4,24 @@
     "lojas": {
           "1": {
                   "nome": "Rio Sul",
-                  "premio_inicial": 500.00,
+                  "premio_inicial": 1500.00,
                   "perda_por_alerta": 50.00,
-                  "saldo_atual": 500.00,
-                  "ciclo_inicio": "14/05/2026"
+                  "saldo_atual": 1500.00,
+                  "ciclo_inicio": "15/05/2026"
           },
           "3": {
                   "nome": "Barra Shopping",
-                  "premio_inicial": 500.00,
+                  "premio_inicial": 1500.00,
                   "perda_por_alerta": 50.00,
-                  "saldo_atual": 500.00,
-                  "ciclo_inicio": "14/05/2026"
+                  "saldo_atual": 1500.00,
+                  "ciclo_inicio": "15/05/2026"
           },
           "4": {
                   "nome": "NorteShopping",
-                  "premio_inicial": 500.00,
+                  "premio_inicial": 1500.00,
                   "perda_por_alerta": 50.00,
-                  "saldo_atual": 500.00,
-                  "ciclo_inicio": "14/05/2026"
+                  "saldo_atual": 1500.00,
+                  "ciclo_inicio": "15/05/2026"
           }
     }
 }
