@@ -178,92 +178,72 @@ def login():
 
 # ─── Busca vendas na hora anterior completa ─────────────────
 def buscar_vendas_hora_anterior(data_str, hora_atual):
-    hora_ref  = hora_atual - 1
-    inicio_min = hora_ref * 60
+    """
+    Verifica vendas validas (valor > VALOR_MINIMO) na hora anterior.
+    Ex: hora_atual=15 -> verifica 14:00 ate 14:59.
+    Usa endpoint /zoop/financeiro com TransacaoPosSearch.
+    """
+    data_enc   = data_str + " - " + data_str
+    params = {
+        "TransacaoPosSearch[data]":               data_enc,
+        "TransacaoPosSearch[status]":             "succeeded",
+        "TransacaoPosSearch[authorization_code]": "",
+        "TransacaoPosSearch[tipo_pagamento]":     "",
+        "TransacaoPosSearch[entry_mode]":         "",
+        "TransacaoPosSearch[id_zoop]":            "",
+    }
+    resultado  = {loja_id: {"total": 0.0, "count": 0} for loja_id in LOJAS}
+    hora_ref   = hora_atual - 1
+    inicio_min = hora_ref   * 60
     fim_min    = hora_atual * 60
 
-    resultado = {loja_id: {"total": 0.0, "count": 0} for loja_id in LOJAS}
-
     try:
-        partes = data_str.split("/")
-        data_fmt = f"{partes[2]}-{partes[1]}-{partes[0]}"
-
-        url = (MOOMBOX_URL + "/order/search"
-               + f"?OrderSearch[created_from]={data_fmt}+{hora_ref:02d}%3A00%3A00"
-               + f"&OrderSearch[created_to]={data_fmt}+{hora_atual:02d}%3A00%3A00"
-               + "&OrderSearch[status][]=succeeded"
-               + "&TransacaoPosSearch[status]=succeeded"
-               + "&per-page=500")
-
-        print(f"Buscando: {url}")
-        r = session.get(url, timeout=30)
-
-        if r.status_code != 200:
-            print(f"ERRO HTTP {r.status_code}")
-            return resultado
-
+        r    = session.get(MOOMBOX_URL + "/zoop/financeiro", params=params, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
-        tabelas = soup.find_all("table")
-
         current_loja = None
-        for tabela in tabelas:
-            caption = tabela.find("caption")
-            if caption:
-                texto = caption.get_text(strip=True)
-                for loja_id, loja_nome in LOJAS.items():
-                    if loja_nome.lower() in texto.lower():
-                        current_loja = loja_id
-                        break
-
-            for row in tabela.find_all("tr"):
-                cells = row.find_all("td")
-                if not cells:
+        for row in soup.select("table tbody tr"):
+            cells = row.find_all("td")
+            if len(cells) == 17:
+                loja_candidata = cells[1].get_text(strip=True)
+                if loja_candidata and loja_candidata != "Total":
+                    current_loja = loja_candidata
+                data_hora = cells[3].get_text(strip=True)
+                valor_op  = cells[5].get_text(strip=True)
+            elif len(cells) == 16:
+                if cells[1].get_text(strip=True) == "Total":
                     continue
+                data_hora = cells[2].get_text(strip=True)
+                valor_op  = cells[4].get_text(strip=True)
+            else:
+                continue
 
-                data_hora = None
-                valor_op  = None
+            if current_loja not in LOJAS:
+                continue
 
-                if len(cells) == 8:
-                    if cells[0].get_text(strip=True) == "Total":
-                        continue
-                    data_hora = cells[3].get_text(strip=True)
-                    valor_op  = cells[5].get_text(strip=True)
-                elif len(cells) == 16:
-                    if cells[1].get_text(strip=True) == "Total":
-                        continue
-                    data_hora = cells[2].get_text(strip=True)
-                    valor_op  = cells[4].get_text(strip=True)
-                else:
+            try:
+                partes = data_hora.split(" ")[1].split(":")
+                h      = int(partes[0])
+                m      = int(partes[1])
+                t_min  = h * 60 + m
+                if not (inicio_min <= t_min < fim_min):
                     continue
+            except:
+                continue
 
-                if current_loja not in LOJAS:
+            try:
+                valor = float(valor_op.replace(",", ".").replace("R$", "").strip())
+                if valor <= VALOR_MINIMO:
                     continue
-
-                try:
-                    partes = data_hora.split(" ")[1].split(":")
-                    h = int(partes[0])
-                    m = int(partes[1])
-                    t_min = h * 60 + m
-                    if not (inicio_min <= t_min < fim_min):
-                        continue
-                except:
-                    continue
-
-                try:
-                    valor_limpo = valor_op.replace("R$", "").replace(".", "").replace(",", ".").strip()
-                    valor_float = float(valor_limpo)
-                    if valor_float >= VALOR_MINIMO:
-                        resultado[current_loja]["total"] += valor_float
-                        resultado[current_loja]["count"] += 1
-                except:
-                    continue
+                resultado[current_loja]["total"] += valor
+                resultado[current_loja]["count"] += 1
+            except:
+                pass
 
     except Exception as e:
-        print(f"ERRO ao buscar vendas: {e}")
+        print(f"ERRO buscar Zoop {data_str}: {e}")
 
     return resultado
 
-# ─── Contadores persistidos ─────────────────────────────
 def carregar_contadores():
     if os.path.exists(CONTADOR_FILE):
         try:
