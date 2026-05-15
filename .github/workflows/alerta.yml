@@ -2,25 +2,14 @@ name: Alerta Inatividade Vendas
 
 on:
   schedule:
-    # === MINUTO :00 ===
-    # Seg a Sab: 10h-20h BRT = 13h-23h UTC (parte 1)
-    - cron: "0 13-23 * * 1-6"
-    # Seg a Sab: 21h e 22h BRT = 00h e 01h UTC (parte 2, dia seguinte)
-    - cron: "0 0-1 * * 2-0"
-    # Dom: 14h-21h BRT = 17h-23h UTC (parte 1)
-    - cron: "0 17-23 * * 0"
-    # Dom: 21h BRT = 00h UTC (segunda-feira UTC)
-    - cron: "0 0 * * 1"
-
-    # === MINUTO :45 ===
-    # Seg a Sab: 10:45h-20:45h BRT = 13:45h-23:45h UTC
-    - cron: "45 13-23 * * 1-6"
-    # Seg a Sab: 21:45h BRT = 00:45h UTC (dia seguinte)
-    - cron: "45 0 * * 2-0"
-    # Dom: 14:45h-20:45h BRT = 17:45h-23:45h UTC
-    - cron: "45 17-23 * * 0"
-    # Dom: 21:45h BRT = 00:45h UTC (segunda-feira UTC) - aviso encerramento dom
-    - cron: "45 0 * * 1"
+    # Minuto :00 - horas 13-23 UTC (10h-20h BRT) todos os dias
+    - cron: "0 13-23 * * *"
+    # Minuto :00 - horas 0 e 1 UTC (21h e 22h BRT) todos os dias
+    - cron: "0 0-1 * * *"
+    # Minuto :45 - horas 13-23 UTC (10:45h-20:45h BRT) todos os dias
+    - cron: "45 13-23 * * *"
+    # Minuto :45 - hora 0 UTC (21:45h BRT) todos os dias
+    - cron: "45 0 * * *"
 
   workflow_dispatch:
     inputs:
