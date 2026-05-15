@@ -62,14 +62,14 @@ footer { text-align: center; padding: 20px; color: #5a5f7e; font-size: 0.78rem; 
 </div>
 <footer>Atualizado automaticamente a cada hora &bull; Moombox Alerta de Vendas v2</footer>
 <script>
-var LOJAS = {"1":"Rio Sul","2":"Barra Shopping","3":"NorteShopping"};
+var LOJAS = {"1":"Rio Sul","3":"Barra Shopping","4":"NorteShopping"};
 var HISTORICO_URL = "../historico.json";
 var _historico = {};
 var _diaAtivo = {};
 
 function dataHojeBRT() {
   var now = new Date();
-  return new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  return now;
 }
 
 function yyyymmddHoje() {
