@@ -367,11 +367,47 @@ def main():
         print("Aviso de encerramento enviado para todas as lojas.")
         return
 
-    # Primeira hora do dia: zera contadores
+    # Primeira hora do dia: zera contadores e envia saldo inicial
     if hora_atual == hora_inicio:
         print(f"Inicio do dia comercial ({hora_inicio}h). Zerando contadores.")
         contadores = {f"alerta_{loja_id}": 0 for loja_id in LOJAS}
         salvar_contadores(contadores)
+
+        # Carrega config para exibir saldo herdado do dia anterior
+        config = carregar_config()
+        linhas_saldo = []
+        for loja_id, loja_nome in LOJAS.items():
+            saldo, dias_ciclo, ciclo_ini = calcular_saldo(config, loja_id, data_str)
+            ciclo_dias = config.get("ciclo_dias", 7)
+            dias_restantes = ciclo_dias - dias_ciclo
+            linha = (
+                f"{loja_nome}: R$ {saldo:.2f}"
+                f" (ciclo {dias_ciclo+1}/{ciclo_dias}, reinicia em {dias_restantes} dia(s))"
+            )
+            linhas_saldo.append(linha)
+            print(f"  {linha}")
+
+        resumo = "\n".join(linhas_saldo)
+        assunto_abertura = f"[ABERTURA] Saldo de premios - {data_str} {hora_inicio}h"
+        corpo_abertura = (
+            f"BOM DIA! Inicio do dia comercial ({hora_inicio}h)\n"
+            + ("=" * 45 + "\n")
+            + f"Data: {data_str} ({tipo_dia})\n"
+            + f"Horario: {hora_inicio}h - {hora_fim}h\n"
+            + ("=" * 45 + "\n")
+            + "SALDO DE PREMIOS (acumulado do dia anterior):\n"
+            + resumo + "\n"
+            + ("=" * 45 + "\n")
+            + "Boa sorte e boas vendas!"
+        )
+        msg_wpp_abertura = (
+            f"BOM DIA! {data_str} {hora_inicio}h\n"
+            + "\n".join([f"  {l}" for l in linhas_saldo])
+        )
+
+        enviar_email(assunto_abertura, corpo_abertura, montar_html(corpo_abertura))
+        enviar_whatsapp(msg_wpp_abertura)
+        print("Mensagem de abertura enviada.")
         return
 
     hora_ref = hora_atual - 1
