@@ -2,13 +2,9 @@ name: Alerta Inatividade Vendas
 
 on:
   schedule:
-    # Minuto :00 - horas 13-23 UTC (10h-20h BRT) todos os dias
     - cron: "0 13-23 * * *"
-    # Minuto :00 - horas 0 e 1 UTC (21h e 22h BRT) todos os dias
     - cron: "0 0-1 * * *"
-    # Minuto :45 - horas 13-23 UTC (10:45h-20:45h BRT) todos os dias
     - cron: "45 13-23 * * *"
-    # Minuto :45 - hora 0 UTC (21:45h BRT) todos os dias
     - cron: "45 0 * * *"
 
   workflow_dispatch:
@@ -33,65 +29,37 @@ jobs:
   alertar:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Instalar dependencias
         run: pip install requests beautifulsoup4 pytz
 
-      - name: Baixar contadores anteriores
-        uses: actions/download-artifact@v4
-        with:
-          name: contadores
-          path: .
-        continue-on-error: true
-
-      - name: Baixar historico anterior
-        uses: actions/download-artifact@v4
-        with:
-          name: historico
-          path: .
-        continue-on-error: true
-
       - name: Executar alerta
         env:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.GMAIL_APP_PASSWORD }}
           EMAIL_DEST: ${{ secrets.EMAIL_DEST }}
-          CALLMEBOT_USER: ${{ secrets.CALLMEBOT_USER }}
-          CALLMEBOT_KEY: ${{ secrets.CALLMEBOT_KEY }}
+          WHATSAPP_NUMERO: ${{ secrets.CALLMEBOT_USER }}
+          WHATSAPP_APIKEY: ${{ secrets.CALLMEBOT_KEY }}
           HORA_SIMULADA: ${{ github.event.inputs.hora_simulada }}
           DATA_SIMULADA: ${{ github.event.inputs.data_simulada }}
           MIN_SIMULADA: ${{ github.event.inputs.min_simulada }}
         run: python alerta_vendas.py
 
-      - name: Salvar contadores como artifact
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: contadores
-          path: contadores.json
-          overwrite: true
-
-      - name: Salvar historico como artifact
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: historico
-          path: historico.json
-          overwrite: true
-
-      - name: Publicar historico.json no repositorio
+      - name: Publicar dados no repositorio
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git pull --rebase origin main || true
-          git add -f historico.json || true
-          git diff --cached --quiet || git commit -m "chore: atualiza historico.json [skip ci]"
-          git push origin main || true
+          git add -f contadores.json historico.json config.json || true
+          cp historico.json alerta-vendas2/historico.json 2>/dev/null || true
+          git add -f alerta-vendas2/historico.json || true
+          git diff --cached --quiet || git commit -m "chore: atualiza dados [skip ci]"
+          git push origin main || true          
