@@ -12,13 +12,13 @@ MOOMBOX_URL = "https://expositores.moombox.com.br"
 USUARIO     = "moombox"
 SENHA       = "admin2020b"
 
-EMAIL_REMETENTE    = os.environ.get("EMAIL_USER",  "cap00leonardo@gmail.com")
-EMAIL_DESTINATARIO = os.environ.get("EMAIL_DEST", "leonardochor@gmail.com")
-GMAIL_APP_PASSWORD = os.environ.get("EMAIL_PASS", "")
+EMAIL_REMETENTE = os.environ.get("EMAIL_USER", "") or "cap00leonardo@gmail.com"
+EMAIL_DESTINATARIO = os.environ.get("EMAIL_DEST", "") or "leonardochor@gmail.com"
+GMAIL_APP_PASSWORD = os.environ.get("EMAIL_PASS", "") or ""
 
-# WhatsApp via CallMeBot (opcional - deixe em branco para desativar)
-WHATSAPP_NUMERO  = os.environ.get("WHATSAPP_NUMERO",  "5521992971444")
-WHATSAPP_APIKEY  = os.environ.get("WHATSAPP_APIKEY",  "")
+# WhatsApp via CallMeBot
+WHATSAPP_NUMERO = os.environ.get("WHATSAPP_NUMERO", "") or os.environ.get("CALLMEBOT_USER", "") or "5521992971444"
+WHATSAPP_APIKEY = os.environ.get("WHATSAPP_APIKEY", "") or os.environ.get("CALLMEBOT_KEY", "") or ""
 
 DATA_SIMULADA = os.environ.get("DATA_SIMULADA", "")
 HORA_SIMULADA = os.environ.get("HORA_SIMULADA", "")
@@ -354,7 +354,7 @@ def main():
         return
 
     # Aviso 15 minutos antes do encerramento do periodo
-    modo_aviso_fim = (agora_br.minute == 45 and hora_atual == hora_fim - 1)
+    modo_aviso_fim = (agora_br.minute >= 40 and hora_atual == hora_fim - 1)
     if modo_aviso_fim:
         for loja_id, loja_nome in LOJAS.items():
             assunto = f"[AVISO ENCERRAMENTO] {loja_nome} - 15 min para fechar"
