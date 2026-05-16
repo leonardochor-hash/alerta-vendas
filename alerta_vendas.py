@@ -345,7 +345,7 @@ def main():
 
     DIAS_SEMANA = ["Segunda", "Terca", "Quarta", "Quinta", "Sexta", "Sabado", "Domingo"]
     tipo_dia    = "Feriado" if data_str in FERIADOS else DIAS_SEMANA[weekday]
-    hora_inicio, hora_fim = get_horario(data_str, weekday)
+    , hora_fim = get_horario(data_str, weekday)
 
     print(f"Data: {data_str} ({tipo_dia}) | Horario: {hora_inicio}h-{hora_fim}h | Hora atual: {hora_atual}h")
 
@@ -408,8 +408,7 @@ def main():
         enviar_email(assunto_abertura, corpo_abertura, montar_html(corpo_abertura))
         enviar_whatsapp(msg_wpp_abertura)
         print("Mensagem de abertura enviada.")
-        return
-
+        
     hora_ref = hora_atual - 1
     print(f"Verificando vendas > R$ {VALOR_MINIMO:.0f}: {data_str} {hora_ref:02d}:00 ate {hora_ref:02d}:59")
 
