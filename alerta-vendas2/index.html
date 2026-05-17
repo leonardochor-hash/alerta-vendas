@@ -68,12 +68,22 @@ var _historico = {};
 var _diaAtivo = {};
 
 function dataHojeBRT() {
-  var now = new Date();
-  return now;
+  var partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric", month: "2-digit", day: "2-digit"
+  }).formatToParts(new Date());
+  var y = partes.find(function(p){return p.type==="year";}).value;
+  var m = partes.find(function(p){return p.type==="month";}).value;
+  var d = partes.find(function(p){return p.type==="day";}).value;
+  return new Date(y + "-" + m + "-" + d + "T12:00:00");
 }
 
 function yyyymmddHoje() {
-  return dataHojeBRT().toISOString().split("T")[0];
+  var d = dataHojeBRT();
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, "0");
+  var dd = String(d.getDate()).padStart(2, "0");
+  return y + "-" + m + "-" + dd;
 }
 
 function yyyymmddParaBR(s) {
@@ -105,7 +115,10 @@ function calcularSemana() {
   for (var i = 6; i >= 0; i--) {
     var d = new Date(brt);
     d.setDate(d.getDate() - i);
-    dias.push(d.toISOString().split("T")[0]);
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, "0");
+    var dd = String(d.getDate()).padStart(2, "0");
+    dias.push(y + "-" + m + "-" + dd);
   }
   return dias;
 }
