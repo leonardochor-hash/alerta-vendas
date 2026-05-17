@@ -60,7 +60,7 @@ FERIADOS = {
 def get_horario(data_str, weekday):
     if data_str in FERIADOS or weekday == 6:
         return 14, 21
-    return 11, 22
+    return 10, 22
 
 # ─── Config de premios ────────────────────────────────
 def carregar_config():
@@ -177,7 +177,7 @@ def login():
         return False
 
 # ─── Busca vendas na hora anterior completa ─────────────────
-def buscar_vendas_hora_anterior(data_str, hora_atual):
+def buscar_vendas_hora_anterior(data_str, hora_atual, hora_ref=None):
     """
     Verifica vendas validas (valor > VALOR_MINIMO) na hora anterior.
     Ex: hora_atual=15 -> verifica 14:00 ate 14:59.
@@ -193,9 +193,10 @@ def buscar_vendas_hora_anterior(data_str, hora_atual):
         "TransacaoPosSearch[id_zoop]":            "",
     }
     resultado  = {loja_id: {"total": 0.0, "count": 0} for loja_id in LOJAS}
-    hora_ref   = hora_atual - 1
-    inicio_min = hora_ref   * 60
-    fim_min    = hora_atual * 60
+    if hora_ref is None:
+        hora_ref = hora_atual - 1
+    inicio_min = hora_ref       * 60
+    fim_min    = (hora_ref + 1) * 60
 
     try:
         r    = session.get(MOOMBOX_URL + "/zoop/financeiro", params=params, timeout=30)
@@ -409,73 +410,101 @@ def main():
         enviar_whatsapp(msg_wpp_abertura)
         print("Mensagem de abertura enviada.")
         
-    hora_ref = hora_atual - 1
-    print(f"Verificando vendas > R$ {VALOR_MINIMO:.0f}: {data_str} {hora_ref:02d}:00 ate {hora_ref:02d}:59")
+    hora_ref_atual = hora_atual - 1
 
     if not login():
         print("ERRO: Login falhou. Abortando.")
         return
 
-    vendas     = buscar_vendas_hora_anterior(data_str, hora_atual)
     contadores = carregar_contadores()
     config     = carregar_config()
     historico  = carregar_historico()
 
-    for loja_id, loja_nome in LOJAS.items():
-        total = vendas[loja_id]["total"]
-        count = vendas[loja_id]["count"]
-        print(f"{loja_nome} (loja {loja_id}): {count} vendas validas | R$ {total:.2f} entre {hora_ref:02d}:00 e {hora_ref:02d}:59")
+    # Catch-up: detecta horas perdidas desde a ultima execucao bem-sucedida
+    ultima_data = contadores.get("ultima_data_verificada", "")
+    ultima_hora = contadores.get("ultima_hora_verificada", -1)
+    try:
+        ultima_hora = int(ultima_hora)
+    except Exception:
+        ultima_hora = -1
 
-        chave = f"alerta_{loja_id}"
-        if count == 0:
-            contadores[chave] = contadores.get(chave, 0) + 1
-            qtd      = contadores[chave]
-            instrucao = INSTRUCOES[min(qtd - 1, len(INSTRUCOES) - 1)]
+    if ultima_data == data_str and ultima_hora >= hora_inicio - 1:
+        primeira = max(ultima_hora + 1, hora_inicio - 1)
+        horas_pendentes = list(range(primeira, hora_ref_atual + 1))
+    else:
+        horas_pendentes = [hora_ref_atual]
 
-            # Calcular e descontar premio
-            saldo_antes, dias_ciclo, ciclo_ini = calcular_saldo(config, loja_id, data_str)
-            novo_saldo = descontar_premio(config, loja_id, data_str)
-            ciclo_dias = config.get("ciclo_dias", 7)
-            dias_restantes = ciclo_dias - dias_ciclo
+    if not horas_pendentes:
+        horas_pendentes = [hora_ref_atual]
 
-            # Montar mensagem
-            linha_premio = (
-                f"Ciclo: {ciclo_ini} ({dias_ciclo} dia(s) de {ciclo_dias})\n"
-                f"Premio atual: R$ {novo_saldo:.2f}  (era R$ {saldo_antes:.2f}, -R$ {saldo_antes - novo_saldo:.2f})\n"
-                f"Dias restantes no ciclo: {dias_restantes}\n"
-            )
+    # Filtra horas dentro do horario comercial (hora_ref deve ser >= hora_inicio - 1 e < hora_fim)
+    horas_pendentes = [h for h in horas_pendentes if (hora_inicio - 1) <= h < hora_fim]
 
-            assunto = f"ALERTA [{loja_nome}] Sem vendas as {hora_ref:02d}h (alerta #{qtd} hoje)"
-            corpo = (
-                f"ALERTA DE INATIVIDADE DE VENDAS\n"
-                + ("=" * 45 + "\n")
-                + f"Loja: {loja_nome}\n"
-                + f"Hora verificada: {hora_ref:02d}:00 - {hora_ref:02d}:59\n"
-                + f"Sem vendas > R$ {VALOR_MINIMO:.0f} nesse periodo\n"
-                + f"Alertas hoje: #{qtd}\n"
-                + ("=" * 45 + "\n")
-                + f"{linha_premio}"
-                + f"Acao recomendada: {instrucao}\n"
-            )
+    print(f"Horas pendentes a verificar: {horas_pendentes} (ultima registrada: {ultima_data} {ultima_hora}h)")
 
-            msg_wpp = f"ALERTA #{qtd} hoje: {loja_nome} | Premio: R$ {novo_saldo:.2f}"
+    for hora_ref in horas_pendentes:
+      print(f"Verificando vendas > R$ {VALOR_MINIMO:.0f}: {data_str} {hora_ref:02d}:00 ate {hora_ref:02d}:59")
+      vendas = buscar_vendas_hora_anterior(data_str, hora_atual, hora_ref=hora_ref)
 
-            print(f" -> ALERTA #{qtd} hoje: {loja_nome} | Premio: R$ {novo_saldo:.2f}")
-            enviar_email(assunto, corpo, montar_html(corpo))
-            enviar_whatsapp(msg_wpp)
-            registrar_alerta_historico(historico, data_str, hora_ref, loja_id)
-        else:
-            # Loja vendeu - limpa alerta do historico se estava marcado falsamente
-            hora_str_ref = f"{hora_ref:02d}:00"
-            if data_str in historico and loja_id in historico.get(data_str, {}):
-                if hora_str_ref in historico[data_str][loja_id]:
-                    historico[data_str][loja_id].remove(hora_str_ref)
-                    if not historico[data_str][loja_id]:
-                        del historico[data_str][loja_id]
-                    if not historico.get(data_str):
-                        del historico[data_str]
-            saldo_atual, _, _ = calcular_saldo(config, loja_id, data_str)
-            print(f" -> {loja_nome} OK. Contador permanece em {contadores.get(chave, 0)}. Premio: R$ {saldo_atual:.2f}")
+      for loja_id, loja_nome in LOJAS.items():
+          total = vendas[loja_id]["total"]
+          count = vendas[loja_id]["count"]
+          print(f"{loja_nome} (loja {loja_id}): {count} vendas validas | R$ {total:.2f} entre {hora_ref:02d}:00 e {hora_ref:02d}:59")
+
+          chave = f"alerta_{loja_id}"
+          if count == 0:
+              contadores[chave] = contadores.get(chave, 0) + 1
+              qtd      = contadores[chave]
+              instrucao = INSTRUCOES[min(qtd - 1, len(INSTRUCOES) - 1)]
+
+              # Calcular e descontar premio
+              saldo_antes, dias_ciclo, ciclo_ini = calcular_saldo(config, loja_id, data_str)
+              novo_saldo = descontar_premio(config, loja_id, data_str)
+              ciclo_dias = config.get("ciclo_dias", 7)
+              dias_restantes = ciclo_dias - dias_ciclo
+
+              # Montar mensagem
+              linha_premio = (
+                  f"Ciclo: {ciclo_ini} ({dias_ciclo} dia(s) de {ciclo_dias})\n"
+                  f"Premio atual: R$ {novo_saldo:.2f}  (era R$ {saldo_antes:.2f}, -R$ {saldo_antes - novo_saldo:.2f})\n"
+                  f"Dias restantes no ciclo: {dias_restantes}\n"
+              )
+
+              assunto = f"ALERTA [{loja_nome}] Sem vendas as {hora_ref:02d}h (alerta #{qtd} hoje)"
+              corpo = (
+                  f"ALERTA DE INATIVIDADE DE VENDAS\n"
+                  + ("=" * 45 + "\n")
+                  + f"Loja: {loja_nome}\n"
+                  + f"Hora verificada: {hora_ref:02d}:00 - {hora_ref:02d}:59\n"
+                  + f"Sem vendas > R$ {VALOR_MINIMO:.0f} nesse periodo\n"
+                  + f"Alertas hoje: #{qtd}\n"
+                  + ("=" * 45 + "\n")
+                  + f"{linha_premio}"
+                  + f"Acao recomendada: {instrucao}\n"
+              )
+
+              msg_wpp = f"ALERTA #{qtd} hoje: {loja_nome} | Premio: R$ {novo_saldo:.2f}"
+
+              print(f" -> ALERTA #{qtd} hoje: {loja_nome} | Premio: R$ {novo_saldo:.2f}")
+              enviar_email(assunto, corpo, montar_html(corpo))
+              enviar_whatsapp(msg_wpp)
+              registrar_alerta_historico(historico, data_str, hora_ref, loja_id)
+          else:
+              # Loja vendeu - limpa alerta do historico se estava marcado falsamente
+              hora_str_ref = f"{hora_ref:02d}:00"
+              if data_str in historico and loja_id in historico.get(data_str, {}):
+                  if hora_str_ref in historico[data_str][loja_id]:
+                      historico[data_str][loja_id].remove(hora_str_ref)
+                      if not historico[data_str][loja_id]:
+                          del historico[data_str][loja_id]
+                      if not historico.get(data_str):
+                          del historico[data_str]
+              saldo_atual, _, _ = calcular_saldo(config, loja_id, data_str)
+              print(f" -> {loja_nome} OK. Contador permanece em {contadores.get(chave, 0)}. Premio: R$ {saldo_atual:.2f}")
+
+    # Salva estado do catch-up
+    contadores["ultima_data_verificada"] = data_str
+    contadores["ultima_hora_verificada"] = hora_ref_atual
 
     salvar_contadores(contadores)
     salvar_historico(historico)
