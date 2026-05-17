@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard Alertas - Moombox</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Segoe UI", sans-serif; background: #0f1117; color: #e0e0e0; min-height: 100vh; }
+header { background: linear-gradient(135deg, #1a1d2e, #252840); padding: 18px 30px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #3a3f6e; }
+header h1 { font-size: 1.4rem; color: #7b9ef7; letter-spacing: 1px; }
+header .sub { font-size: 0.82rem; color: #9a9db8; margin-top: 2px; }
+header .data-hora { font-size: 0.85rem; color: #9a9db8; text-align: right; }
+.container { max-width: 1200px; margin: 28px auto; padding: 0 20px; }
+.section-title { font-size: 0.85rem; color: #9a9db8; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 14px; padding-bottom: 7px; border-bottom: 1px solid #3a3f6e; display: flex; align-items: center; gap: 8px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot-blue { background: #7b9ef7; } .dot-orange { background: #f07070; }
+.resumo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin-bottom: 32px; }
+.loja-card { background: linear-gradient(145deg, #1e2136, #252840); border-radius: 14px; padding: 22px 24px; border: 1px solid #3a3f6e; }
+.loja-card h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 2px; color: #7b9ef7; margin-bottom: 14px; }
+.stats-row { display: flex; gap: 12px; }
+.stat-box { flex: 1; background: rgba(0,0,0,0.2); border-radius: 10px; padding: 12px 14px; border: 1px solid #2a2f52; text-align: center; }
+.stat-box .val { font-size: 2rem; font-weight: 700; line-height: 1; }
+.stat-box .lab { font-size: 0.7rem; color: #9a9db8; text-transform: uppercase; letter-spacing: 1px; margin-top: 5px; }
+.val-zero { color: #4caf7d; } .val-low { color: #d4a840; } .val-med { color: #e07040; } .val-high { color: #f05050; }
+.historico-section { margin-bottom: 32px; }
+.loja-historico { background: #1e2136; border-radius: 14px; border: 1px solid #3a3f6e; margin-bottom: 18px; overflow: hidden; }
+.loja-historico-header { background: #252840; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.loja-historico-header h4 { font-size: 0.85rem; font-weight: 600; color: #c0c8f0; text-transform: uppercase; letter-spacing: 1px; }
+.nav-dias { display: flex; gap: 6px; flex-wrap: wrap; }
+.nav-dia-btn { background: #1e2136; border: 1px solid #3a3f6e; color: #9a9db8; padding: 4px 10px; border-radius: 6px; font-size: 0.72rem; cursor: pointer; transition: all 0.2s; }
+.nav-dia-btn:hover { background: #2a2f52; color: #e0e0e0; }
+.nav-dia-btn.active { background: #7b9ef7; border-color: #7b9ef7; color: #0f1117; font-weight: 700; }
+.loja-historico-body { padding: 16px 20px; min-height: 60px; }
+.horas-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.hora-badge { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 600; background: #3a1a1a; color: #f07070; border: 1px solid #6e2a2a; }
+.sem-alerta { font-size: 0.82rem; color: #4caf7d; }
+.sem-dado { font-size: 0.82rem; color: #5a5f7e; font-style: italic; }
+.loading { color: #9a9db8; font-style: italic; font-size: 0.85rem; }
+.erro { color: #f07070; font-size: 0.85rem; }
+.legenda { background: #1a1d2e; border: 1px solid #3a3f6e; border-radius: 10px; padding: 12px 18px; margin-bottom: 24px; font-size: 0.8rem; color: #9a9db8; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+footer { text-align: center; padding: 20px; color: #5a5f7e; font-size: 0.78rem; border-top: 1px solid #2a2f52; margin-top: 10px; }
+@media (max-width: 600px) { header h1 { font-size: 1.1rem; } .stats-row { flex-direction: column; } }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>&#128202; Dashboard de Alertas</h1><div class="sub">Moombox &mdash; Monitoramento de Inatividade</div></div>
+  <div class="data-hora" id="data-hora"></div>
+</header>
+<div class="container">
+  <div class="section-title"><span class="dot dot-blue"></span>Resumo de Notificacoes</div>
+  <div class="resumo-grid" id="resumo-grid"><div class="loading">Carregando dados...</div></div>
+  <div class="legenda">
+    <span>&#9679; 0 alertas: Perfeito</span>
+    <span>&#9679; 1-2 alertas: Atencao</span>
+    <span>&#9679; 3-4 alertas: Critico</span>
+    <span>&#9679; 5+ alertas: Emergencia</span>
+  </div>
+  <div class="section-title" style="margin-top:8px;"><span class="dot dot-orange"></span>Historico de Alertas por Loja</div>
+  <div class="historico-section" id="historico-section"><div class="loading">Carregando historico...</div></div>
+</div>
+<footer>Atualizado automaticamente a cada hora &bull; Moombox Alerta de Vendas v2</footer>
+<script>
+var LOJAS = {"1":"Rio Sul","3":"Barra Shopping","4":"NorteShopping"};
+var HISTORICO_URL = "../historico.json";
+var _historico = {};
+var _diaAtivo = {};
+
+function dataHojeBRT() {
+  var now = new Date();
+  return now;
+}
+
+function yyyymmddHoje() {
+  return dataHojeBRT().toISOString().split("T")[0];
+}
+
+function yyyymmddParaBR(s) {
+  if (!s) return "";
+  var p = s.split("-"); return p[2]+"/"+p[1]+"/"+p[0];
+}
+
+function ddmmyyyyParaYYYYMMDD(s) {
+  if (!s) return "";
+  var p = s.split("/"); return p[2]+"-"+p[1]+"-"+p[0];
+}
+
+function diaSemanaBR(yyyymmdd) {
+  var dias = ["Dom","Seg","Ter","Qua","Qui","Sex","Sab"];
+  var d = new Date(yyyymmdd + "T12:00:00");
+  return dias[d.getDay()];
+}
+
+function getCorVal(n) {
+  if (n === 0) return "val-zero";
+  if (n <= 2) return "val-low";
+  if (n <= 4) return "val-med";
+  return "val-high";
+}
+
+function calcularSemana() {
+  var brt = dataHojeBRT();
+  var dias = [];
+  for (var i = 6; i >= 0; i--) {
+    var d = new Date(brt);
+    d.setDate(d.getDate() - i);
+    dias.push(d.toISOString().split("T")[0]);
+  }
+  return dias;
+}
+
+function atualizarRelogio() {
+  var brt = dataHojeBRT();
+  var el = document.getElementById("data-hora");
+  if (el) el.innerHTML = brt.toLocaleDateString("pt-BR",{weekday:"long",year:"numeric",month:"long",day:"numeric"}) + "<br>" + brt.toLocaleTimeString("pt-BR") + " (BRT)";
+}
+setInterval(atualizarRelogio, 1000);
+atualizarRelogio();
+
+function alertasDia(lojaId, yyyymmdd) {
+  var ddmm = yyyymmddParaBR(yyyymmdd);
+  var diaData = _historico[ddmm];
+  if (!diaData) return [];
+  return diaData[lojaId] || [];
+}
+
+function alertasSemana(lojaId, diasSemana) {
+  var total = 0;
+  for (var i = 0; i < diasSemana.length; i++) total += alertasDia(lojaId, diasSemana[i]).length;
+  return total;
+}
+
+function renderResumo(diasSemana) {
+  var hj = diasSemana[diasSemana.length - 1];
+  var grid = document.getElementById("resumo-grid");
+  grid.innerHTML = "";
+  var ids = Object.keys(LOJAS);
+  for (var i = 0; i < ids.length; i++) {
+    var lojaId = ids[i];
+    var lojaNome = LOJAS[lojaId];
+    var qtdHoje = alertasDia(lojaId, hj).length;
+    var qtdSemana = alertasSemana(lojaId, diasSemana);
+    var card = document.createElement("div");
+    card.className = "loja-card";
+    card.innerHTML =
+      "<h3>" + lojaNome + "</h3>" +
+      "<div class=\"stats-row\">" +
+        "<div class=\"stat-box\">" +
+          "<div class=\"val " + getCorVal(qtdHoje) + "\">" + qtdHoje + "</div>" +
+          "<div class=\"lab\">Alertas hoje</div>" +
+        "</div>" +
+        "<div class=\"stat-box\">" +
+          "<div class=\"val " + getCorVal(qtdSemana) + "\">" + qtdSemana + "</div>" +
+          "<div class=\"lab\">Na semana</div>" +
+        "</div>" +
+      "</div>";
+    grid.appendChild(card);
+  }
+}
+
+function renderBodyLoja(lojaId, yyyymmdd) {
+  var horas = alertasDia(lojaId, yyyymmdd);
+  var ddmm = yyyymmddParaBR(yyyymmdd);
+  var diaExiste = _historico[ddmm] !== undefined;
+  if (!diaExiste) return "<div class=\"sem-dado\">Sem dados para " + yyyymmddParaBR(yyyymmdd) + "</div>";
+  if (horas.length === 0) return "<div class=\"sem-alerta\">&#10003; Nenhum alerta em " + yyyymmddParaBR(yyyymmdd) + "</div>";
+  var sorted = horas.slice().sort();
+  var badges = sorted.map(function(h) { return "<span class=\"hora-badge\">&#9888; " + h + "</span>"; }).join("");
+  return "<div class=\"horas-grid\">" + badges + "</div>";
+}
+
+function selecionarDia(lojaId, yyyymmdd) {
+  _diaAtivo[lojaId] = yyyymmdd;
+  var container = document.getElementById("hist-loja-" + lojaId);
+  var btns = container.querySelectorAll(".nav-dia-btn");
+  for (var i = 0; i < btns.length; i++) {
+    btns[i].classList.remove("active");
+    if (btns[i].getAttribute("data-dia") === yyyymmdd) btns[i].classList.add("active");
+  }
+  document.getElementById("body-loja-" + lojaId).innerHTML = renderBodyLoja(lojaId, yyyymmdd);
+}
+
+function renderHistorico(diasSemana) {
+  var sec = document.getElementById("historico-section");
+  sec.innerHTML = "";
+  var ids = Object.keys(LOJAS);
+  for (var li = 0; li < ids.length; li++) {
+    var lojaId = ids[li];
+    var lojaNome = LOJAS[lojaId];
+    var hj = diasSemana[diasSemana.length - 1];
+    if (!_diaAtivo[lojaId]) _diaAtivo[lojaId] = hj;
+    var diaAtual = _diaAtivo[lojaId];
+
+    var div = document.createElement("div");
+    div.className = "loja-historico";
+    div.id = "hist-loja-" + lojaId;
+
+    var headerDiv = document.createElement("div");
+    headerDiv.className = "loja-historico-header";
+    var h4 = document.createElement("h4");
+    h4.textContent = lojaNome;
+    headerDiv.appendChild(h4);
+
+    var navDiv = document.createElement("div");
+    navDiv.className = "nav-dias";
+    for (var di = 0; di < diasSemana.length; di++) {
+      var d = diasSemana[di];
+      var btn = document.createElement("button");
+      btn.className = "nav-dia-btn" + (d === diaAtual ? " active" : "");
+      btn.setAttribute("data-dia", d);
+      btn.textContent = diaSemanaBR(d) + " " + yyyymmddParaBR(d);
+      (function(lid, dia) {
+        btn.addEventListener("click", function() { selecionarDia(lid, dia); });
+      })(lojaId, d);
+      navDiv.appendChild(btn);
+    }
+    headerDiv.appendChild(navDiv);
+    div.appendChild(headerDiv);
+
+    var bodyDiv = document.createElement("div");
+    bodyDiv.className = "loja-historico-body";
+    bodyDiv.id = "body-loja-" + lojaId;
+    bodyDiv.innerHTML = renderBodyLoja(lojaId, diaAtual);
+    div.appendChild(bodyDiv);
+    sec.appendChild(div);
+  }
+}
+
+function carregarDados() {
+  var url = HISTORICO_URL + "?t=" + Date.now();
+  fetch(url).then(function(r) {
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  }).then(function(data) {
+    _historico = data;
+    var diasSemana = calcularSemana();
+    renderResumo(diasSemana);
+    renderHistorico(diasSemana);
+  }).catch(function(e) {
+    console.error("Erro ao carregar historico.json:", e);
+    document.getElementById("resumo-grid").innerHTML = "<div class=\"erro\">Erro: " + e.message + "</div>";
+    document.getElementById("historico-section").innerHTML = "<div class=\"erro\">Nenhum dado disponivel ainda. Os dados aparecerao apos o primeiro alerta ser disparado.</div>";
+  });
+}
+
+carregarDados();
+setInterval(carregarDados, 5 * 60 * 1000);
+</script>
+</body>
+</html>
