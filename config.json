@@ -6,14 +6,14 @@
       "nome": "Rio Sul",
       "premio_inicial": 1500.0,
       "perda_por_alerta": 50.0,
-      "saldo_atual": 1500.0,
+      "saldo_atual": 1450.0,
       "ciclo_inicio": "15/05/2026"
     },
     "3": {
       "nome": "Barra Shopping",
       "premio_inicial": 1500.0,
       "perda_por_alerta": 50.0,
-      "saldo_atual": 1050.0,
+      "saldo_atual": 1000.0,
       "ciclo_inicio": "15/05/2026"
     },
     "4": {
