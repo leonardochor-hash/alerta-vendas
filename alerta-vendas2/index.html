@@ -19,7 +19,8 @@ header .data-hora { font-size: 0.85rem; color: #9a9db8; text-align: right; }
 .loja-card { background: linear-gradient(145deg, #1e2136, #252840); border-radius: 14px; padding: 22px 24px; border: 1px solid #3a3f6e; }
 .loja-card h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 2px; color: #7b9ef7; margin-bottom: 14px; }
 .stats-row { display: flex; gap: 12px; }
-.stat-box { flex: 1; background: rgba(0,0,0,0.2); border-radius: 10px; padding: 12px 14px; border: 1px solid #2a2f52; text-align: center; }
+.premio-box { background: linear-gradient(135deg, #1a2540, #1f2e4d) !important; border: 1px solid #3a5fa8; }
+        .stat-box { flex: 1; background: rgba(0,0,0,0.2); border-radius: 10px; padding: 12px 14px; border: 1px solid #2a2f52; text-align: center; }
 .stat-box .val { font-size: 2rem; font-weight: 700; line-height: 1; }
 .stat-box .lab { font-size: 0.7rem; color: #9a9db8; text-transform: uppercase; letter-spacing: 1px; margin-top: 5px; }
 .val-zero { color: #4caf7d; } .val-low { color: #d4a840; } .val-med { color: #e07040; } .val-high { color: #f05050; }
@@ -64,7 +65,10 @@ footer { text-align: center; padding: 20px; color: #5a5f7e; font-size: 0.78rem; 
 <script>
 var LOJAS = {"1":"Rio Sul","3":"Barra Shopping","4":"NorteShopping"};
 var HISTORICO_URL = "../historico.json";
+  var CONFIG_URL = "../config.json";
+  var CICLO_INICIO_BR = "15/05/2026";
 var _historico = {};
+  var _config = null;
 var _diaAtivo = {};
 
 function dataHojeBRT() {
@@ -110,11 +114,14 @@ function getCorVal(n) {
 }
 
 function calcularSemana() {
-  var brt = dataHojeBRT();
+  // Semana = 7 dias a partir do ciclo_inicio (config.json) - fallback 15/05/2026
+  var inicioBR = (_config && _config.lojas && _config.lojas["1"] && _config.lojas["1"].ciclo_inicio) || CICLO_INICIO_BR;
+  var yyyymmdd = ddmmyyyyParaYYYYMMDD(inicioBR);
+  var inicio = new Date(yyyymmdd + "T12:00:00");
   var dias = [];
-  for (var i = 6; i >= 0; i--) {
-    var d = new Date(brt);
-    d.setDate(d.getDate() - i);
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(inicio);
+    d.setDate(d.getDate() + i);
     var y = d.getFullYear();
     var m = String(d.getMonth() + 1).padStart(2, "0");
     var dd = String(d.getDate()).padStart(2, "0");
@@ -145,7 +152,8 @@ function alertasSemana(lojaId, diasSemana) {
 }
 
 function renderResumo(diasSemana) {
-  var hj = diasSemana[diasSemana.length - 1];
+  var hojeYmd = yyyymmddHoje();
+  var hj = (diasSemana.indexOf(hojeYmd) >= 0) ? hojeYmd : diasSemana[diasSemana.length - 1];
   var grid = document.getElementById("resumo-grid");
   grid.innerHTML = "";
   var ids = Object.keys(LOJAS);
@@ -156,6 +164,14 @@ function renderResumo(diasSemana) {
     var qtdSemana = alertasSemana(lojaId, diasSemana);
     var card = document.createElement("div");
     card.className = "loja-card";
+    var premioInicial = 1500, perda = 50, saldo = premioInicial - qtdSemana * perda;
+    if (_config && _config.lojas && _config.lojas[lojaId]) {
+      premioInicial = _config.lojas[lojaId].premio_inicial || 1500;
+      perda = _config.lojas[lojaId].perda_por_alerta || 50;
+      saldo = (_config.lojas[lojaId].saldo_atual != null) ? _config.lojas[lojaId].saldo_atual : (premioInicial - qtdSemana * perda);
+    }
+    var saldoFmt = "R$ " + Number(saldo).toLocaleString("pt-BR");
+    var saldoClass = saldo >= premioInicial * 0.7 ? "val-zero" : (saldo >= premioInicial * 0.4 ? "val-med" : "val-high");
     card.innerHTML =
       "<h3>" + lojaNome + "</h3>" +
       "<div class=\"stats-row\">" +
@@ -166,6 +182,10 @@ function renderResumo(diasSemana) {
         "<div class=\"stat-box\">" +
           "<div class=\"val " + getCorVal(qtdSemana) + "\">" + qtdSemana + "</div>" +
           "<div class=\"lab\">Na semana</div>" +
+        "</div>" +
+        "<div class=\"stat-box premio-box\">" +
+          "<div class=\"val " + saldoClass + "\">" + saldoFmt + "</div>" +
+          "<div class=\"lab\">Premio acumulado</div>" +
         "</div>" +
       "</div>";
     grid.appendChild(card);
@@ -201,7 +221,8 @@ function renderHistorico(diasSemana) {
   for (var li = 0; li < ids.length; li++) {
     var lojaId = ids[li];
     var lojaNome = LOJAS[lojaId];
-    var hj = diasSemana[diasSemana.length - 1];
+    var hojeYmd = yyyymmddHoje();
+  var hj = (diasSemana.indexOf(hojeYmd) >= 0) ? hojeYmd : diasSemana[diasSemana.length - 1];
     if (!_diaAtivo[lojaId]) _diaAtivo[lojaId] = hj;
     var diaAtual = _diaAtivo[lojaId];
 
@@ -241,12 +262,14 @@ function renderHistorico(diasSemana) {
 }
 
 function carregarDados() {
-  var url = HISTORICO_URL + "?t=" + Date.now();
-  fetch(url).then(function(r) {
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    return r.json();
-  }).then(function(data) {
-    _historico = data;
+  var urlH = HISTORICO_URL + "?t=" + Date.now();
+  var urlC = CONFIG_URL + "?t=" + Date.now();
+  Promise.all([
+    fetch(urlH).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }),
+    fetch(urlC).then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; })
+  ]).then(function(arr) {
+    _historico = arr[0];
+    _config = arr[1];
     var diasSemana = calcularSemana();
     renderResumo(diasSemana);
     renderHistorico(diasSemana);
