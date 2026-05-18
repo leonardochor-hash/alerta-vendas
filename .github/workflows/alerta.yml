@@ -2,8 +2,11 @@ name: Alerta Inatividade Vendas
 
 on:
   schedule:
+    # OFICIAIS - minuto :00 (cobrem 11h-22h BRT seg-sab e 15h-21h BRT dom/feriado)
+    # BRT = UTC-3, sem horario de verao em 2026. O script filtra horarios validos.
     - cron: "0 13-23 * * *"
     - cron: "0 0-1 * * *"
+    # PREVIAS - minuto :45 (cobrem 10h-21h BRT seg-sab e 14h-20h BRT dom/feriado)
     - cron: "45 13-23 * * *"
     - cron: "45 0 * * *"
 
@@ -18,7 +21,11 @@ on:
         required: false
         default: ""
       min_simulada:
-        description: "Minuto simulado (ex: 00)"
+        description: "Minuto simulado (00 ou 45)"
+        required: false
+        default: ""
+      forcar_modo:
+        description: "Forcar modo: oficial | previa | (vazio = auto pelo minuto)"
         required: false
         default: ""
 
@@ -45,11 +52,13 @@ jobs:
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.GMAIL_APP_PASSWORD }}
           EMAIL_DEST: ${{ secrets.EMAIL_DEST }}
+          MOOMBOX_PASSWORD: ${{ secrets.MOOMBOX_PASSWORD }}
           WHATSAPP_NUMERO: ${{ secrets.CALLMEBOT_USER }}
           WHATSAPP_APIKEY: ${{ secrets.CALLMEBOT_KEY }}
           HORA_SIMULADA: ${{ github.event.inputs.hora_simulada }}
           DATA_SIMULADA: ${{ github.event.inputs.data_simulada }}
           MIN_SIMULADA: ${{ github.event.inputs.min_simulada }}
+          FORCAR_MODO: ${{ github.event.inputs.forcar_modo }}
         run: python alerta_vendas.py
 
       - name: Publicar dados no repositorio
@@ -62,4 +71,4 @@ jobs:
           cp historico.json alerta-vendas2/historico.json 2>/dev/null || true
           git add -f alerta-vendas2/historico.json || true
           git diff --cached --quiet || git commit -m "chore: atualiza dados [skip ci]"
-          git push origin main || true          
+          git push origin main || true
