@@ -7,26 +7,27 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# ─── Configuracoes ─────────────────────────────────────
+# Configuracoes
 MOOMBOX_URL = "https://expositores.moombox.com.br"
-USUARIO     = "moombox"
-SENHA       = "admin2020b"
+USUARIO = "moombox"
+SENHA = os.environ.get("MOOMBOX_PASSWORD", "")
 
 EMAIL_REMETENTE = os.environ.get("EMAIL_USER", "") or "cap00leonardo@gmail.com"
 EMAIL_DESTINATARIO = os.environ.get("EMAIL_DEST", "") or "leonardochor@gmail.com"
 GMAIL_APP_PASSWORD = os.environ.get("EMAIL_PASS", "") or ""
 
-# WhatsApp via CallMeBot
+# WhatsApp via CallMeBot (preparado, ativa quando WHATSAPP_APIKEY tiver valor)
 WHATSAPP_NUMERO = os.environ.get("WHATSAPP_NUMERO", "") or os.environ.get("CALLMEBOT_USER", "") or "5521992971444"
 WHATSAPP_APIKEY = os.environ.get("WHATSAPP_APIKEY", "") or os.environ.get("CALLMEBOT_KEY", "") or ""
 
 DATA_SIMULADA = os.environ.get("DATA_SIMULADA", "")
 HORA_SIMULADA = os.environ.get("HORA_SIMULADA", "")
-MIN_SIMULADA  = os.environ.get("MIN_SIMULADA",  "")
+MIN_SIMULADA = os.environ.get("MIN_SIMULADA", "")
+FORCAR_MODO = os.environ.get("FORCAR_MODO", "").strip().lower()
 
 CONTADOR_FILE = "contadores.json"
 HISTORICO_FILE = "historico.json"
-CONFIG_FILE   = "config.json"
+CONFIG_FILE = "config.json"
 
 VALOR_MINIMO = 80.0
 
@@ -43,51 +44,64 @@ INSTRUCOES = [
     "URGENTE: Contato direto com o responsavel da loja. Risco de fechamento sem vendas.",
 ]
 
-# ─── Feriados nacionais brasileiros 2026 ─────────────────
+# Feriados nacionais brasileiros 2026
 FERIADOS = {
-    "01/01/2026",  # Ano Novo
-    "20/04/2026",  # Pascoa (segunda-feira)
-    "21/04/2026",  # Tiradentes
-    "01/05/2026",  # Dia do Trabalho
-    "07/09/2026",  # Independencia
-    "12/10/2026",  # Nossa Senhora Aparecida
-    "02/11/2026",  # Finados
-    "15/11/2026",  # Proclamacao da Republica
-    "25/12/2026",  # Natal
+    "01/01/2026",
+    "20/04/2026",
+    "21/04/2026",
+    "01/05/2026",
+    "07/09/2026",
+    "12/10/2026",
+    "02/11/2026",
+    "15/11/2026",
+    "25/12/2026",
 }
 
-# ─── Horario por tipo de dia ──────────────────────────
-def get_horario(data_str, weekday):
-    if data_str in FERIADOS or weekday == 6:
-        return 14, 21
-    return 10, 22
+# Janela horaria por tipo de dia
+# - Util (seg-sab): oficiais :00 das 11h as 22h, previas :45 das 10h as 21h
+# - Dom/Feriado: oficiais :00 das 15h as 21h, previas :45 das 14h as 20h
+# Dom/Feriado nao envia email mas atualiza contadores/historico/saldo
+def dia_sem_email(data_str, weekday):
+    return data_str in FERIADOS or weekday == 6
 
-# ─── Config de premios ────────────────────────────────
+def get_grade(data_str, weekday):
+    if dia_sem_email(data_str, weekday):
+        return {
+            "oficial_inicio": 15,
+            "oficial_fim": 21,
+            "previa_inicio": 14,
+            "previa_fim": 20,
+        }
+    return {
+        "oficial_inicio": 11,
+        "oficial_fim": 22,
+        "previa_inicio": 10,
+        "previa_fim": 21,
+    }
+
+# Config de premios
 def carregar_config():
-    """Le config.json com configuracoes de premio por loja."""
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             print(f"AVISO: Nao foi possivel ler {CONFIG_FILE}: {e}")
-    # Config padrao se arquivo nao existir
     return {
         "ciclo_dias": 7,
         "lojas": {
             loja_id: {
                 "nome": nome,
-                "premio_inicial": 500.0,
+                "premio_inicial": 1500.0,
                 "perda_por_alerta": 50.0,
-                "saldo_atual": 500.0,
-                "ciclo_inicio": datetime.now().strftime("%d/%m/%Y")
+                "saldo_atual": 1500.0,
+                "ciclo_inicio": datetime.now().strftime("%d/%m/%Y"),
             }
             for loja_id, nome in LOJAS.items()
-        }
+        },
     }
 
 def salvar_config(config):
-    """Salva config.json atualizado (saldo_atual atualizado apos cada alerta)."""
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
@@ -95,56 +109,43 @@ def salvar_config(config):
         print(f"ERRO ao salvar config: {e}")
 
 def calcular_saldo(config, loja_id, data_str):
-    """
-    Retorna (saldo_atual, dias_ciclo, ciclo_inicio) para a loja.
-    Reinicia automaticamente se o ciclo de config['ciclo_dias'] dias venceu.
-    """
-    loja_cfg  = config["lojas"].get(loja_id, {})
+    loja_cfg = config["lojas"].get(loja_id, {})
     ciclo_ini = loja_cfg.get("ciclo_inicio", data_str)
     ciclo_dias = config.get("ciclo_dias", 7)
-
     try:
-        dt_hoje   = datetime.strptime(data_str,  "%d/%m/%Y")
-        dt_ciclo  = datetime.strptime(ciclo_ini, "%d/%m/%Y")
+        dt_hoje = datetime.strptime(data_str, "%d/%m/%Y")
+        dt_ciclo = datetime.strptime(ciclo_ini, "%d/%m/%Y")
         dias_ciclo = (dt_hoje - dt_ciclo).days
     except Exception:
         dias_ciclo = 0
-
     if dias_ciclo >= ciclo_dias:
-        # Reinicia ciclo
-        premio_inicial = loja_cfg.get("premio_inicial", 500.0)
-        config["lojas"][loja_id]["saldo_atual"]   = premio_inicial
-        config["lojas"][loja_id]["ciclo_inicio"]  = data_str
-        ciclo_ini  = data_str
+        premio_inicial = loja_cfg.get("premio_inicial", 1500.0)
+        config["lojas"][loja_id]["saldo_atual"] = premio_inicial
+        config["lojas"][loja_id]["ciclo_inicio"] = data_str
+        ciclo_ini = data_str
         dias_ciclo = 0
         saldo_atual = premio_inicial
     else:
-        saldo_atual = loja_cfg.get("saldo_atual", loja_cfg.get("premio_inicial", 500.0))
-
+        saldo_atual = loja_cfg.get("saldo_atual", loja_cfg.get("premio_inicial", 1500.0))
     return saldo_atual, dias_ciclo, ciclo_ini
 
 def descontar_premio(config, loja_id, data_str):
-    """
-    Desconta perda_por_alerta do saldo_atual da loja.
-    Retorna novo saldo.
-    """
-    # Garante que a entrada da loja existe no config
     if loja_id not in config["lojas"]:
         config["lojas"][loja_id] = {
             "nome": LOJAS.get(loja_id, loja_id),
-            "premio_inicial": 500.0,
+            "premio_inicial": 1500.0,
             "perda_por_alerta": 50.0,
-            "saldo_atual": 500.0,
-            "ciclo_inicio": data_str
+            "saldo_atual": 1500.0,
+            "ciclo_inicio": data_str,
         }
-    loja_cfg         = config["lojas"][loja_id]
-    perda            = loja_cfg.get("perda_por_alerta", 50.0)
+    loja_cfg = config["lojas"][loja_id]
+    perda = loja_cfg.get("perda_por_alerta", 50.0)
     saldo_atual, _, _ = calcular_saldo(config, loja_id, data_str)
-    novo_saldo       = max(0.0, saldo_atual - perda)
+    novo_saldo = max(0.0, saldo_atual - perda)
     config["lojas"][loja_id]["saldo_atual"] = novo_saldo
     return novo_saldo
 
-# ─── Sessao HTTP ──────────────────────────────────
+# Sessao HTTP
 def make_session():
     s = requests.Session()
     s.headers.update({"User-Agent": "Mozilla/5.0"})
@@ -154,7 +155,7 @@ session = make_session()
 
 def login():
     try:
-        r    = session.get(MOOMBOX_URL + "/user/login", timeout=30)
+        r = session.get(MOOMBOX_URL + "/user/login", timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
         csrf_tag = soup.find("input", {"name": "_csrf"})
         if not csrf_tag:
@@ -162,10 +163,10 @@ def login():
             return False
         csrf = csrf_tag["value"]
         resp = session.post(MOOMBOX_URL + "/user/login", data={
-            "_csrf":                   csrf,
-            "login-form[login]":       USUARIO,
-            "login-form[password]":    SENHA,
-            "login-form[rememberMe]":  "0",
+            "_csrf": csrf,
+            "login-form[login]": USUARIO,
+            "login-form[password]": SENHA,
+            "login-form[rememberMe]": "0",
         }, timeout=30)
         if "logout" in resp.text.lower():
             print("Login OK")
@@ -176,30 +177,20 @@ def login():
         print(f"ERRO login: {e}")
         return False
 
-# ─── Busca vendas na hora anterior completa ─────────────────
-def buscar_vendas_hora_anterior(data_str, hora_atual, hora_ref=None):
-    """
-    Verifica vendas validas (valor > VALOR_MINIMO) na hora anterior.
-    Ex: hora_atual=15 -> verifica 14:00 ate 14:59.
-    Usa endpoint /zoop/financeiro com TransacaoPosSearch.
-    """
-    data_enc   = data_str + " - " + data_str
+# Busca vendas em uma janela [min_ini, min_fim) do dia
+def buscar_vendas_janela(data_str, min_ini, min_fim):
+    data_enc = data_str + " - " + data_str
     params = {
-        "TransacaoPosSearch[data]":               data_enc,
-        "TransacaoPosSearch[status]":             "succeeded",
+        "TransacaoPosSearch[data]": data_enc,
+        "TransacaoPosSearch[status]": "succeeded",
         "TransacaoPosSearch[authorization_code]": "",
-        "TransacaoPosSearch[tipo_pagamento]":     "",
-        "TransacaoPosSearch[entry_mode]":         "",
-        "TransacaoPosSearch[id_zoop]":            "",
+        "TransacaoPosSearch[tipo_pagamento]": "",
+        "TransacaoPosSearch[entry_mode]": "",
+        "TransacaoPosSearch[id_zoop]": "",
     }
-    resultado  = {loja_id: {"total": 0.0, "count": 0} for loja_id in LOJAS}
-    if hora_ref is None:
-        hora_ref = hora_atual - 1
-    inicio_min = hora_ref       * 60
-    fim_min    = (hora_ref + 1) * 60
-
+    resultado = {loja_id: {"total": 0.0, "count": 0} for loja_id in LOJAS}
     try:
-        r    = session.get(MOOMBOX_URL + "/zoop/financeiro", params=params, timeout=30)
+        r = session.get(MOOMBOX_URL + "/zoop/financeiro", params=params, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
         current_loja = None
         for row in soup.select("table tbody tr"):
@@ -209,40 +200,35 @@ def buscar_vendas_hora_anterior(data_str, hora_atual, hora_ref=None):
                 if loja_candidata and loja_candidata != "Total":
                     current_loja = loja_candidata
                 data_hora = cells[3].get_text(strip=True)
-                valor_op  = cells[5].get_text(strip=True)
+                valor_op = cells[5].get_text(strip=True)
             elif len(cells) == 16:
                 if cells[1].get_text(strip=True) == "Total":
                     continue
                 data_hora = cells[2].get_text(strip=True)
-                valor_op  = cells[4].get_text(strip=True)
+                valor_op = cells[4].get_text(strip=True)
             else:
                 continue
-
             if current_loja not in LOJAS:
                 continue
-
             try:
                 partes = data_hora.split(" ")[1].split(":")
-                h      = int(partes[0])
-                m      = int(partes[1])
-                t_min  = h * 60 + m
-                if not (inicio_min <= t_min < fim_min):
+                h = int(partes[0])
+                m = int(partes[1])
+                t_min = h * 60 + m
+                if not (min_ini <= t_min < min_fim):
                     continue
-            except:
+            except Exception:
                 continue
-
             try:
                 valor = float(valor_op.replace(",", ".").replace("R$", "").strip())
                 if valor <= VALOR_MINIMO:
                     continue
                 resultado[current_loja]["total"] += valor
                 resultado[current_loja]["count"] += 1
-            except:
+            except Exception:
                 pass
-
     except Exception as e:
         print(f"ERRO buscar Zoop {data_str}: {e}")
-
     return resultado
 
 def carregar_contadores():
@@ -250,7 +236,7 @@ def carregar_contadores():
         try:
             with open(CONTADOR_FILE, "r") as f:
                 return json.load(f)
-        except:
+        except Exception:
             pass
     return {}
 
@@ -263,7 +249,7 @@ def carregar_historico():
         try:
             with open(HISTORICO_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except:
+        except Exception:
             pass
     return {}
 
@@ -280,7 +266,7 @@ def registrar_alerta_historico(historico, data_str, hora_ref, loja_id):
     if hora_str not in historico[data_str][loja_id]:
         historico[data_str][loja_id].append(hora_str)
 
-# ─── Email ────────────────────────────────────────────
+# Email
 def enviar_email(assunto, corpo, html=None):
     if not GMAIL_APP_PASSWORD:
         print("AVISO: GMAIL_APP_PASSWORD nao configurado. Email nao enviado.")
@@ -288,8 +274,8 @@ def enviar_email(assunto, corpo, html=None):
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = assunto
-        msg["From"]    = EMAIL_REMETENTE
-        msg["To"]      = EMAIL_DESTINATARIO
+        msg["From"] = EMAIL_REMETENTE
+        msg["To"] = EMAIL_DESTINATARIO
         msg.attach(MIMEText(corpo, "plain", "utf-8"))
         if html:
             msg.attach(MIMEText(html, "html", "utf-8"))
@@ -304,7 +290,7 @@ def montar_html(corpo):
     linhas = corpo.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     return f"<pre style='font-family:monospace'>{linhas}</pre>"
 
-# ─── WhatsApp via CallMeBot ─────────────────────────────
+# WhatsApp (inativo enquanto WHATSAPP_APIKEY estiver vazio)
 def enviar_whatsapp(msg):
     if not WHATSAPP_APIKEY:
         return
@@ -324,10 +310,202 @@ def enviar_whatsapp(msg):
     except Exception as e:
         print(f"ERRO WhatsApp (nao critico): {e}")
 
-# ─── Logica principal ─────────────────────────────────
 def normalizar_hora(h_str):
     h_str = h_str.strip()
     return h_str + ":00" if ":" not in h_str else h_str
+
+def determinar_modo(agora_br):
+    if FORCAR_MODO in ("oficial", "previa"):
+        return FORCAR_MODO
+    minuto = agora_br.minute
+    if minuto >= 30:
+        return "previa"
+    return "oficial"
+
+def executar_previa(agora_br, data_str, weekday, grade):
+    hora = agora_br.hour
+    if not (grade["previa_inicio"] <= hora <= grade["previa_fim"]):
+        print(f"Previa fora da janela ({grade['previa_inicio']}h-{grade['previa_fim']}h). Hora atual: {hora}h.")
+        return
+    if not login():
+        print("ERRO: Login falhou na previa. Abortando previa.")
+        return
+    min_ini = hora * 60
+    min_fim = hora * 60 + 45
+    print(f"PREVIA {data_str} {hora:02d}:45 -> verificando vendas entre {hora:02d}:00 e {hora:02d}:45")
+    vendas = buscar_vendas_janela(data_str, min_ini, min_fim)
+    for loja_id, loja_nome in LOJAS.items():
+        total = vendas[loja_id]["total"]
+        count = vendas[loja_id]["count"]
+        print(f"  {loja_nome}: {count} vendas validas | R$ {total:.2f}")
+        if count == 0:
+            if dia_sem_email(data_str, weekday):
+                print(f"   -> sem venda mas dia sem email ({loja_nome}). Sem aviso.")
+                continue
+            assunto = f"[AVISO 15 MIN] {loja_nome} - faltam 15 min para perder R$ 50"
+            corpo = (
+                "AVISO PREVIO (15 min antes da rodada oficial)
+"
+                + ("=" * 45 + "
+")
+                + f"Loja: {loja_nome}
+"
+                + f"Janela observada: {hora:02d}:00 - {hora:02d}:45
+"
+                + "Nenhuma venda valida (acima de R$ 80) registrada.
+"
+                + "Se nao houver venda ate o fim da hora, R$ 50 serao descontados do premio.
+"
+                + ("=" * 45 + "
+")
+                + "Acao: agir agora para evitar a perda."
+            )
+            enviar_email(assunto, corpo, montar_html(corpo))
+
+def executar_oficial(agora_br, data_str, weekday, grade):
+    hora = agora_br.hour
+    if not (grade["oficial_inicio"] <= hora <= grade["oficial_fim"]):
+        print(f"Oficial fora da janela ({grade['oficial_inicio']}h-{grade['oficial_fim']}h). Hora atual: {hora}h.")
+        return
+    hora_ref_atual = hora - 1
+    if not login():
+        print("ERRO: Login falhou. Abortando oficial.")
+        return
+    contadores = carregar_contadores()
+    config = carregar_config()
+    historico = carregar_historico()
+
+    # Mensagem de abertura na primeira oficial do dia
+    if hora == grade["oficial_inicio"]:
+        print(f"Primeira oficial do dia ({hora}h). Zerando contadores.")
+        contadores = {f"alerta_{loja_id}": 0 for loja_id in LOJAS}
+        salvar_contadores(contadores)
+        if not dia_sem_email(data_str, weekday):
+            linhas_saldo = []
+            for loja_id, loja_nome in LOJAS.items():
+                saldo, dias_ciclo, ciclo_ini = calcular_saldo(config, loja_id, data_str)
+                ciclo_dias = config.get("ciclo_dias", 7)
+                dias_restantes = ciclo_dias - dias_ciclo
+                linha = (
+                    f"{loja_nome}: R$ {saldo:.2f}"
+                    f" (ciclo {dias_ciclo+1}/{ciclo_dias}, reinicia em {dias_restantes} dia(s))"
+                )
+                linhas_saldo.append(linha)
+                print(f"  {linha}")
+            resumo = "
+".join(linhas_saldo)
+            assunto_abertura = f"[ABERTURA] Saldo de premios - {data_str} {hora}h"
+            corpo_abertura = (
+                f"BOM DIA! Inicio do dia comercial ({hora}h)
+"
+                + ("=" * 45 + "
+")
+                + f"Data: {data_str}
+"
+                + f"Janela oficial: {grade['oficial_inicio']}h - {grade['oficial_fim']}h
+"
+                + ("=" * 45 + "
+")
+                + "SALDO DE PREMIOS (acumulado do dia anterior):
+"
+                + resumo + "
+"
+                + ("=" * 45 + "
+")
+                + "Boa sorte e boas vendas!"
+            )
+            enviar_email(assunto_abertura, corpo_abertura, montar_html(corpo_abertura))
+            print("Mensagem de abertura enviada.")
+        else:
+            print("Dia sem email (dom/feriado). Mensagem de abertura suprimida.")
+
+    # Catch-up: detecta horas perdidas
+    ultima_data = contadores.get("ultima_data_verificada", "")
+    ultima_hora = contadores.get("ultima_hora_verificada", -1)
+    try:
+        ultima_hora = int(ultima_hora)
+    except Exception:
+        ultima_hora = -1
+    if ultima_data == data_str and ultima_hora >= grade["oficial_inicio"] - 1:
+        primeira = max(ultima_hora + 1, grade["oficial_inicio"] - 1)
+        horas_pendentes = list(range(primeira, hora_ref_atual + 1))
+    else:
+        horas_pendentes = [hora_ref_atual]
+    if not horas_pendentes:
+        horas_pendentes = [hora_ref_atual]
+    horas_pendentes = [h for h in horas_pendentes if (grade["oficial_inicio"] - 1) <= h <= (grade["oficial_fim"] - 1)]
+    print(f"Horas oficiais pendentes: {horas_pendentes} (ultima registrada: {ultima_data} {ultima_hora}h)")
+
+    for hora_ref in horas_pendentes:
+        min_ini = hora_ref * 60
+        min_fim = (hora_ref + 1) * 60
+        print(f"Verificando vendas > R$ {VALOR_MINIMO:.0f}: {data_str} {hora_ref:02d}:00 ate {hora_ref:02d}:59")
+        vendas = buscar_vendas_janela(data_str, min_ini, min_fim)
+        for loja_id, loja_nome in LOJAS.items():
+            total = vendas[loja_id]["total"]
+            count = vendas[loja_id]["count"]
+            print(f"  {loja_nome} (loja {loja_id}): {count} vendas | R$ {total:.2f}")
+            chave = f"alerta_{loja_id}"
+            if count == 0:
+                contadores[chave] = contadores.get(chave, 0) + 1
+                qtd = contadores[chave]
+                instrucao = INSTRUCOES[min(qtd - 1, len(INSTRUCOES) - 1)]
+                saldo_antes, dias_ciclo, ciclo_ini = calcular_saldo(config, loja_id, data_str)
+                novo_saldo = descontar_premio(config, loja_id, data_str)
+                ciclo_dias = config.get("ciclo_dias", 7)
+                dias_restantes = ciclo_dias - dias_ciclo
+                linha_premio = (
+                    f"Ciclo: {ciclo_ini} ({dias_ciclo} dia(s) de {ciclo_dias})
+"
+                    f"Premio atual: R$ {novo_saldo:.2f} (era R$ {saldo_antes:.2f}, -R$ {saldo_antes - novo_saldo:.2f})
+"
+                    f"Dias restantes no ciclo: {dias_restantes}
+"
+                )
+                if not dia_sem_email(data_str, weekday):
+                    assunto = f"ALERTA [{loja_nome}] Sem vendas as {hora_ref:02d}h (alerta #{qtd} hoje)"
+                    corpo = (
+                        "ALERTA DE INATIVIDADE DE VENDAS
+"
+                        + ("=" * 45 + "
+")
+                        + f"Loja: {loja_nome}
+"
+                        + f"Hora verificada: {hora_ref:02d}:00 - {hora_ref:02d}:59
+"
+                        + f"Sem vendas > R$ {VALOR_MINIMO:.0f} nesse periodo
+"
+                        + f"Alertas hoje: #{qtd}
+"
+                        + ("=" * 45 + "
+")
+                        + linha_premio
+                        + f"Acao recomendada: {instrucao}
+"
+                    )
+                    enviar_email(assunto, corpo, montar_html(corpo))
+                    print(f"   -> ALERTA #{qtd}: {loja_nome} | Premio: R$ {novo_saldo:.2f}")
+                else:
+                    print(f"   -> Desconto silencioso (dom/feriado): {loja_nome} -R$ 50 | Premio: R$ {novo_saldo:.2f}")
+                registrar_alerta_historico(historico, data_str, hora_ref, loja_id)
+            else:
+                hora_str_ref = f"{hora_ref:02d}:00"
+                if data_str in historico and loja_id in historico.get(data_str, {}):
+                    if hora_str_ref in historico[data_str][loja_id]:
+                        historico[data_str][loja_id].remove(hora_str_ref)
+                        if not historico[data_str][loja_id]:
+                            del historico[data_str][loja_id]
+                        if not historico.get(data_str):
+                            del historico[data_str]
+                saldo_atual, _, _ = calcular_saldo(config, loja_id, data_str)
+                print(f"   -> {loja_nome} OK. Premio: R$ {saldo_atual:.2f}")
+
+    contadores["ultima_data_verificada"] = data_str
+    contadores["ultima_hora_verificada"] = hora_ref_atual
+    salvar_contadores(contadores)
+    salvar_historico(historico)
+    salvar_config(config)
+    print("Contadores:", contadores)
 
 def main():
     if DATA_SIMULADA:
@@ -337,179 +515,27 @@ def main():
             agora_br = agora_br.replace(minute=int(MIN_SIMULADA.strip()))
     else:
         import pytz
-        tz_br    = pytz.timezone("America/Sao_Paulo")
+        tz_br = pytz.timezone("America/Sao_Paulo")
         agora_br = datetime.now(tz_br).replace(tzinfo=None)
 
-    hora_atual = agora_br.hour
-    data_str   = agora_br.strftime("%d/%m/%Y")
-    weekday    = agora_br.weekday()  # 0=seg, 5=sab, 6=dom
-
+    data_str = agora_br.strftime("%d/%m/%Y")
+    weekday = agora_br.weekday()
+    grade = get_grade(data_str, weekday)
     DIAS_SEMANA = ["Segunda", "Terca", "Quarta", "Quinta", "Sexta", "Sabado", "Domingo"]
-    tipo_dia    = "Feriado" if data_str in FERIADOS else DIAS_SEMANA[weekday]
-    hora_inicio, hora_fim = get_horario(data_str, weekday)
+    tipo_dia = "Feriado" if data_str in FERIADOS else DIAS_SEMANA[weekday]
 
-    print(f"Data: {data_str} ({tipo_dia}) | Horario: {hora_inicio}h-{hora_fim}h | Hora atual: {hora_atual}h")
+    modo = determinar_modo(agora_br)
+    print(
+        f"Data: {data_str} ({tipo_dia}) | Hora: {agora_br.hour:02d}:{agora_br.minute:02d} | "
+        f"Modo: {modo} | Janela oficial: {grade['oficial_inicio']}h-{grade['oficial_fim']}h | "
+        f"Previa: {grade['previa_inicio']}h-{grade['previa_fim']}h | "
+        f"Dia sem email: {dia_sem_email(data_str, weekday)}"
+    )
 
-    if not (hora_inicio <= hora_atual < hora_fim) and not (hora_atual == hora_fim and agora_br.minute != 0):
-        print("Fora do horario de funcionamento. Nada enviado.")
-        return
-
-    # Aviso 15 minutos antes do encerramento do periodo
-    modo_aviso_fim = (agora_br.minute >= 40 and hora_atual == hora_fim - 1)
-    if modo_aviso_fim:
-        for loja_id, loja_nome in LOJAS.items():
-            assunto = f"[AVISO ENCERRAMENTO] {loja_nome} - 15 min para fechar"
-            corpo = (
-                f"AVISO DE ENCERRAMENTO\n"
-                f"A loja {loja_nome} tem 15 min ate o fim do periodo ({hora_fim}h).\n"
-                f"Prepare a equipe para fechar as vendas do dia!"
-            )
-            enviar_email(assunto, corpo)
-        print("Aviso de encerramento enviado para todas as lojas.")
-        return
-
-    # Primeira hora do dia: zera contadores e envia saldo inicial
-    if hora_atual == hora_inicio:
-        print(f"Inicio do dia comercial ({hora_inicio}h). Zerando contadores.")
-        contadores = {f"alerta_{loja_id}": 0 for loja_id in LOJAS}
-        salvar_contadores(contadores)
-
-        # Carrega config para exibir saldo herdado do dia anterior
-        config = carregar_config()
-        linhas_saldo = []
-        for loja_id, loja_nome in LOJAS.items():
-            saldo, dias_ciclo, ciclo_ini = calcular_saldo(config, loja_id, data_str)
-            ciclo_dias = config.get("ciclo_dias", 7)
-            dias_restantes = ciclo_dias - dias_ciclo
-            linha = (
-                f"{loja_nome}: R$ {saldo:.2f}"
-                f" (ciclo {dias_ciclo+1}/{ciclo_dias}, reinicia em {dias_restantes} dia(s))"
-            )
-            linhas_saldo.append(linha)
-            print(f"  {linha}")
-
-        resumo = "\n".join(linhas_saldo)
-        assunto_abertura = f"[ABERTURA] Saldo de premios - {data_str} {hora_inicio}h"
-        corpo_abertura = (
-            f"BOM DIA! Inicio do dia comercial ({hora_inicio}h)\n"
-            + ("=" * 45 + "\n")
-            + f"Data: {data_str} ({tipo_dia})\n"
-            + f"Horario: {hora_inicio}h - {hora_fim}h\n"
-            + ("=" * 45 + "\n")
-            + "SALDO DE PREMIOS (acumulado do dia anterior):\n"
-            + resumo + "\n"
-            + ("=" * 45 + "\n")
-            + "Boa sorte e boas vendas!"
-        )
-        msg_wpp_abertura = (
-            f"BOM DIA! {data_str} {hora_inicio}h\n"
-            + "\n".join([f"  {l}" for l in linhas_saldo])
-        )
-
-        enviar_email(assunto_abertura, corpo_abertura, montar_html(corpo_abertura))
-        enviar_whatsapp(msg_wpp_abertura)
-        print("Mensagem de abertura enviada.")
-        
-    hora_ref_atual = hora_atual - 1
-
-    if not login():
-        print("ERRO: Login falhou. Abortando.")
-        return
-
-    contadores = carregar_contadores()
-    config     = carregar_config()
-    historico  = carregar_historico()
-
-    # Catch-up: detecta horas perdidas desde a ultima execucao bem-sucedida
-    ultima_data = contadores.get("ultima_data_verificada", "")
-    ultima_hora = contadores.get("ultima_hora_verificada", -1)
-    try:
-        ultima_hora = int(ultima_hora)
-    except Exception:
-        ultima_hora = -1
-
-    if ultima_data == data_str and ultima_hora >= hora_inicio - 1:
-        primeira = max(ultima_hora + 1, hora_inicio - 1)
-        horas_pendentes = list(range(primeira, hora_ref_atual + 1))
+    if modo == "previa":
+        executar_previa(agora_br, data_str, weekday, grade)
     else:
-        horas_pendentes = [hora_ref_atual]
-
-    if not horas_pendentes:
-        horas_pendentes = [hora_ref_atual]
-
-    # Filtra horas dentro do horario comercial (hora_ref deve ser >= hora_inicio - 1 e < hora_fim)
-    horas_pendentes = [h for h in horas_pendentes if (hora_inicio - 1) <= h < hora_fim]
-
-    print(f"Horas pendentes a verificar: {horas_pendentes} (ultima registrada: {ultima_data} {ultima_hora}h)")
-
-    for hora_ref in horas_pendentes:
-      print(f"Verificando vendas > R$ {VALOR_MINIMO:.0f}: {data_str} {hora_ref:02d}:00 ate {hora_ref:02d}:59")
-      vendas = buscar_vendas_hora_anterior(data_str, hora_atual, hora_ref=hora_ref)
-
-      for loja_id, loja_nome in LOJAS.items():
-          total = vendas[loja_id]["total"]
-          count = vendas[loja_id]["count"]
-          print(f"{loja_nome} (loja {loja_id}): {count} vendas validas | R$ {total:.2f} entre {hora_ref:02d}:00 e {hora_ref:02d}:59")
-
-          chave = f"alerta_{loja_id}"
-          if count == 0:
-              contadores[chave] = contadores.get(chave, 0) + 1
-              qtd      = contadores[chave]
-              instrucao = INSTRUCOES[min(qtd - 1, len(INSTRUCOES) - 1)]
-
-              # Calcular e descontar premio
-              saldo_antes, dias_ciclo, ciclo_ini = calcular_saldo(config, loja_id, data_str)
-              novo_saldo = descontar_premio(config, loja_id, data_str)
-              ciclo_dias = config.get("ciclo_dias", 7)
-              dias_restantes = ciclo_dias - dias_ciclo
-
-              # Montar mensagem
-              linha_premio = (
-                  f"Ciclo: {ciclo_ini} ({dias_ciclo} dia(s) de {ciclo_dias})\n"
-                  f"Premio atual: R$ {novo_saldo:.2f}  (era R$ {saldo_antes:.2f}, -R$ {saldo_antes - novo_saldo:.2f})\n"
-                  f"Dias restantes no ciclo: {dias_restantes}\n"
-              )
-
-              assunto = f"ALERTA [{loja_nome}] Sem vendas as {hora_ref:02d}h (alerta #{qtd} hoje)"
-              corpo = (
-                  f"ALERTA DE INATIVIDADE DE VENDAS\n"
-                  + ("=" * 45 + "\n")
-                  + f"Loja: {loja_nome}\n"
-                  + f"Hora verificada: {hora_ref:02d}:00 - {hora_ref:02d}:59\n"
-                  + f"Sem vendas > R$ {VALOR_MINIMO:.0f} nesse periodo\n"
-                  + f"Alertas hoje: #{qtd}\n"
-                  + ("=" * 45 + "\n")
-                  + f"{linha_premio}"
-                  + f"Acao recomendada: {instrucao}\n"
-              )
-
-              msg_wpp = f"ALERTA #{qtd} hoje: {loja_nome} | Premio: R$ {novo_saldo:.2f}"
-
-              print(f" -> ALERTA #{qtd} hoje: {loja_nome} | Premio: R$ {novo_saldo:.2f}")
-              enviar_email(assunto, corpo, montar_html(corpo))
-              enviar_whatsapp(msg_wpp)
-              registrar_alerta_historico(historico, data_str, hora_ref, loja_id)
-          else:
-              # Loja vendeu - limpa alerta do historico se estava marcado falsamente
-              hora_str_ref = f"{hora_ref:02d}:00"
-              if data_str in historico and loja_id in historico.get(data_str, {}):
-                  if hora_str_ref in historico[data_str][loja_id]:
-                      historico[data_str][loja_id].remove(hora_str_ref)
-                      if not historico[data_str][loja_id]:
-                          del historico[data_str][loja_id]
-                      if not historico.get(data_str):
-                          del historico[data_str]
-              saldo_atual, _, _ = calcular_saldo(config, loja_id, data_str)
-              print(f" -> {loja_nome} OK. Contador permanece em {contadores.get(chave, 0)}. Premio: R$ {saldo_atual:.2f}")
-
-    # Salva estado do catch-up
-    contadores["ultima_data_verificada"] = data_str
-    contadores["ultima_hora_verificada"] = hora_ref_atual
-
-    salvar_contadores(contadores)
-    salvar_historico(historico)
-    salvar_config(config)
-    print("Contadores:", contadores)
+        executar_oficial(agora_br, data_str, weekday, grade)
 
 if __name__ == "__main__":
     main()
