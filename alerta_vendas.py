@@ -420,7 +420,7 @@ def main():
     DIAS_SEMANA = ["Segunda", "Terca", "Quarta", "Quinta", "Sexta", "Sabado", "Domingo"]
     tipo_dia = "Feriado" if data_str in FERIADOS else DIAS_SEMANA[weekday]
     modo = determinar_modo(agora_br)
-    print("Data: " + data_str + " (" + tipo_dia + ") | Hora: " + str(agora_br.hour).zfill(2) + ":" + str(agora_br.minute).zfill(2) + " | Modo: " + modo + " | Oficial: " + str(grade["oficial_inicio"]) + "h-" + str(grade["oficial_fim"]) + "h | Previa: " + str(grade["previa_inicio"]) + "h-" + str(grade["previa_fim"]) + "h")
+    print("Data: " + data_str + " (" + tipo_dia + ") | Hora: " + str(agora_br.hour).zfill(2) + ":" + str(agora_br.minute).zfill(2) + " | Modo: " + modo + " | Oficial: " + str(grade["oficial_inicio"]) + "h-" + str(grade["oficial_fim"]) + "h")
     if modo == "previa":
         executar_previa(agora_br, data_str, weekday, grade)
     else:
