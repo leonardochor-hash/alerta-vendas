@@ -420,7 +420,7 @@ def main():
     DIAS_SEMANA = ["Segunda", "Terca", "Quarta", "Quinta", "Sexta", "Sabado", "Domingo"]
     tipo_dia = "Feriado" if data_str in FERIADOS else DIAS_SEMANA[weekday]
     modo = determinar_modo(agora_br)
-    print("Data: " + data_str + " (" + tipo_dia + ") | Hora: " + str(agora_br.hour).zfill(2) + ":" + str(agora_br.minute).zfill(2) + " | Modo: " + modo + " | Oficial: " + str(grade["oficial_inicio"]) + "h-" + str(grade["oficial_fim"]) + "h | Previa: " + str(grade["previa_inicio"]) + "h-" + str(grade["previa_fim"]) + "h") | Hora: {agora_br.hour:02d}:{agora_br.minute:02d} | Modo: {modo} | Oficial: {grade[chr(34)+chr(111)+chr(102)+chr(105)+chr(99)+chr(105)+chr(97)+chr(108)+chr(95)+chr(105)+chr(110)+chr(105)+chr(99)+chr(105)+chr(111)+chr(34)]}h-{grade[chr(34)+chr(111)+chr(102)+chr(105)+chr(99)+chr(105)+chr(97)+chr(108)+chr(95)+chr(102)+chr(105)+chr(109)+chr(34)]}h")
+    print("Data: " + data_str + " (" + tipo_dia + ") | Hora: " + str(agora_br.hour).zfill(2) + ":" + str(agora_br.minute).zfill(2) + " | Modo: " + modo + " | Oficial: " + str(grade["oficial_inicio"]) + "h-" + str(grade["oficial_fim"]) + "h | Previa: " + str(grade["previa_inicio"]) + "h-" + str(grade["previa_fim"]) + "h")
     if modo == "previa":
         executar_previa(agora_br, data_str, weekday, grade)
     else:
