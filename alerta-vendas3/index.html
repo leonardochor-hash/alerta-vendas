@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+  <html lang="pt-BR">
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arena de Premios - Moombox</title>
+  <style>
+    :root {
+      --bg-0: #0a0612;
+    --bg-1: #14091f;
+    --bg-2: #1c0d2b;
+    --gold-1: #ffd24a;
+          --gold-2: #f5a623;
+          --gold-3: #b8740f;
+          --silver: #c9d2dc;
+          --bronze: #c97a3e;
+          --green: #2ee07a;
+    --yellow: #ffd24a;
+          --orange: #ff8a2b;
+          --red: #ff3b5c;
+          --text: #f3eaff;
+          --muted: #9b8bb5;
+    --card: rgba(255,255,255,0.04);
+    --card-br: rgba(255,210,74,0.18);
+}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+    background:
+          radial-gradient(circle at 20% 0%, rgba(255,168,42,0.12), transparent 50%),
+                  radial-gradient(circle at 80% 100%, rgba(180,80,255,0.10), transparent 50%),
+                  linear-gradient(180deg, var(--bg-0), var(--bg-1));
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px;
+    overflow-x: hidden;
+}
+  .header {
+        display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 28px; padding-bottom: 18px;
+    border-bottom: 1px solid rgba(255,210,74,0.15);
+}
+  .header h1 {
+        font-size: 30px; font-weight: 800; letter-spacing: 1px;
+    background: linear-gradient(90deg, var(--gold-1), #fff8d6, var(--gold-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+  .header .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .header .clock { text-align: right; color: var(--muted); font-size: 13px; }
+  .header .clock .big { font-size: 20px; color: var(--gold-1); font-weight: 700; }
+
+  .section-title {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; letter-spacing: 2px; color: var(--gold-1);
+    text-transform: uppercase; margin: 28px 0 14px;
+}
+  .section-title::before {
+    content: ''; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--gold-1); box-shadow: 0 0 8px var(--gold-1);
+}
+
+  /* ===== PODIO ===== */
+  .podium {
+    display: grid; grid-template-columns: 1fr 1.2fr 1fr; gap: 18px;
+    align-items: end; margin-bottom: 24px;
+}
+      .podium-card {
+    background: var(--card); border: 1px solid var(--card-br);
+    border-radius: 16px; padding: 22px; text-align: center;
+    position: relative; transition: transform .3s;
+            backdrop-filter: blur(6px);
+}
+  .podium-card:hover { transform: translateY(-4px); }
+  .podium-card.first {
+    border-color: var(--gold-1);
+    box-shadow: 0 0 28px rgba(255,210,74,0.35), inset 0 0 20px rgba(255,210,74,0.08);
+    background: linear-gradient(180deg, rgba(255,210,74,0.10), rgba(255,210,74,0.02));
+}
+  .podium-card.second {
+    border-color: var(--silver);
+    box-shadow: 0 0 18px rgba(201,210,220,0.20);
+      }
+  .podium-card.third {
+    border-color: var(--bronze);
+    box-shadow: 0 0 18px rgba(201,122,62,0.20);
+    }
+      .trophy { font-size: 48px; margin-bottom: 6px; display: block; }
+  .podium-card.first .trophy { filter: drop-shadow(0 0 14px var(--gold-1)); animation: pulse 2s infinite; }
+  @keyframes pulse {
+        0%,100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+    }
+      .pos { font-size: 11px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+  .podium-card.first .pos { color: var(--gold-1); }
+  .podium-card .nome { font-size: 18px; font-weight: 700; margin: 6px 0 4px; }
+        .podium-card .saldo { font-size: 26px; font-weight: 800; color: var(--gold-1); }
+  .podium-card.first .saldo { font-size: 32px; }
+  .podium-card .lab { font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+
+  /* ===== CARDS DE LOJA ===== */
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .loja {
+    background: var(--card); border: 1px solid var(--card-br);
+    border-radius: 16px; padding: 22px;
+    backdrop-filter: blur(6px); position: relative; overflow: hidden;
+    }
+  .loja::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+        background: linear-gradient(90deg, var(--gold-1), var(--gold-2));
+    opacity: .6;
+}
+  .loja h2 {
+        font-size: 16px; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--gold-1); margin-bottom: 14px;
+}
+  .badges {
+        display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; min-height: 26px;
+  }
+  .badge {
+        font-size: 11px; padding: 4px 10px; border-radius: 999px;
+    background: rgba(255,210,74,0.12); color: var(--gold-1);
+    border: 1px solid rgba(255,210,74,0.30);
+}
+  .badge.green { background: rgba(46,224,122,0.12); color: var(--green); border-color: rgba(46,224,122,0.30); }
+  .badge.red { background: rgba(255,59,92,0.10); color: var(--red); border-color: rgba(255,59,92,0.30); }
+  .saldo-line {
+        display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px;
+}
+  .saldo-big { font-size: 32px; font-weight: 800; color: var(--gold-1); }
+  .saldo-pct { font-size: 13px; color: var(--muted); }
+  .progress {
+        width: 100%; height: 12px; border-radius: 999px;
+    background: rgba(255,255,255,0.06); overflow: hidden; position: relative;
+    margin-bottom: 14px;
+}
+  .progress-fill {
+        height: 100%; border-radius: 999px;
+    background: linear-gradient(90deg, var(--green), var(--gold-1));
+    transition: width 1.2s cubic-bezier(.2,.8,.2,1);
+    box-shadow: 0 0 12px rgba(255,210,74,0.4);
+}
+  .progress-fill.warn { background: linear-gradient(90deg, var(--yellow), var(--orange)); }
+  .progress-fill.danger { background: linear-gradient(90deg, var(--orange), var(--red)); box-shadow: 0 0 14px rgba(255,59,92,0.5); }
+
+  .stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .stat {
+        background: rgba(255,255,255,0.03); border-radius: 10px;
+    padding: 10px; text-align: center;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .stat .v { font-size: 18px; font-weight: 700; }
+  .stat .v.green { color: var(--green); }
+  .stat .v.gold { color: var(--gold-1); }
+  .stat .l { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
+
+  .streak {
+        display: flex; align-items: center; gap: 8px;
+    padding: 10px 12px; border-radius: 10px;
+    background: linear-gradient(90deg, rgba(255,138,43,0.15), rgba(255,59,92,0.10));
+    border: 1px solid rgba(255,138,43,0.25);
+    margin-bottom: 12px; font-size: 13px;
+  }
+  .streak .fire { font-size: 20px; }
+  .streak.cold { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); color: var(--muted); }
+
+  .projecao {
+        padding: 10px 12px; border-radius: 10px;
+    background: rgba(46,224,122,0.08);
+    border-left: 3px solid var(--green);
+    font-size: 12px; margin-bottom: 12px;
+  }
+  .projecao .v { font-weight: 700; color: var(--green); font-size: 16px; }
+  .projecao.bad { background: rgba(255,59,92,0.08); border-left-color: var(--red); }
+  .projecao.bad .v { color: var(--red); }
+
+  .sparkline { height: 40px; width: 100%; margin-bottom: 12px; }
+
+  .frase {
+        font-size: 13px; font-style: italic; color: var(--muted);
+    padding: 10px 0 0; border-top: 1px dashed rgba(255,210,74,0.15);
+    text-align: center;
+}
+  .frase.win { color: var(--green); }
+  .frase.warn { color: var(--yellow); }
+  .frase.urg { color: var(--red); }
+
+  /* ===== H2H ===== */
+  .h2h {
+        background: var(--card); border: 1px solid var(--card-br); border-radius: 16px;
+    padding: 20px; margin-top: 24px;
+  }
+  .h2h-row {
+        display: flex; align-items: center; gap: 14px; margin-bottom: 10px;
+    font-size: 14px;
+}
+  .h2h-row:last-child { margin-bottom: 0; }
+  .h2h-row .vs { color: var(--gold-1); font-weight: 700; }
+  .h2h-row .diff { margin-left: auto; font-weight: 700; }
+  .h2h-row .diff.pos { color: var(--green); }
+  .h2h-row .diff.neg { color: var(--red); }
+
+  .footer { text-align: center; margin-top: 30px; color: var(--muted); font-size: 11px; }
+
+  @media (max-width: 900px) {
+    .podium, .grid { grid-template-columns: 1fr; }
+}
+</style>
+  </head>
+  <body>
+    <div class="header">
+      <div>
+        <h1>ARENA DE PREMIOS</h1>
+        <div class="sub">Moombox - Competicao em tempo real</div>
+      </div>
+      <div class="clock">
+        <div id="data"></div>
+        <div class="big" id="hora"></div>
+      </div>
+    </div>
+
+    <div class="section-title">Podium da Semana</div>
+  <div class="podium" id="podium"></div>
+
+  <div class="section-title">Status das Lojas</div>
+  <div class="grid" id="grid"></div>
+
+  <div class="section-title">Confronto Direto</div>
+    <div class="h2h" id="h2h"></div>
+
+    <div class="footer">Atualiza automaticamente - Moombox Arena v3 (prototipo de gamificacao)</div>
+
+  <script>
+  const LOJAS_DEFAULT = { "1": "Rio Sul", "3": "Barra Shopping", "4": "NorteShopping" };
+const HISTORICO_URL = "../historico.json";
+const CONFIG_URL = "../config.json";
+const PREMIO_INICIAL_PADRAO = 1500;
+const PERDA_PADRAO = 50;
+const CICLO_DIAS_PADRAO = 7;
+
+function parseDateBR(s) {
+    const [d,m,y] = s.split("/").map(n=>parseInt(n,10));
+  return new Date(y, m-1, d, 12);
+}
+function fmtBR(d) {
+  return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();
+}
+function hojeBR() {
+  const d = new Date();
+  return fmtBR(d);
+}
+function diasSemanaAtual(historico) {
+  const hoje = new Date(); hoje.setHours(12,0,0,0);
+  const dow = hoje.getDay(); // 0=dom
+  const offsetMon = (dow + 6) % 7;
+  const seg = new Date(hoje); seg.setDate(hoje.getDate() - offsetMon);
+  const dias = [];
+  for (let i=0;i<7;i++) { const d = new Date(seg); d.setDate(seg.getDate()+i); dias.push(fmtBR(d)); }
+  return dias;
+  }
+function alertasNo(historico, lojaId, dataBR) {
+  return (historico[dataBR] && historico[dataBR][lojaId]) ? historico[dataBR][lojaId] : [];
+  }
+function totalSemana(historico, lojaId, dias) {
+  return dias.reduce((acc,d)=>acc + alertasNo(historico,lojaId,d).length, 0);
+}
+function calcularSaldo(config, lojaId, qtdSemana) {
+  const cfg = config && config.lojas && config.lojas[lojaId] ? config.lojas[lojaId] : {};
+  const inicial = cfg.premio_inicial || PREMIO_INICIAL_PADRAO;
+  const perda = cfg.perda_por_alerta || PERDA_PADRAO;
+  return Math.max(0, inicial - qtdSemana * perda);
+}
+function streakSemAlerta(alertasHoje, horaAtual) {
+  // conta horas consecutivas sem alerta ate a hora atual (11h-22h janela oficial)
+  const set = new Set(alertasHoje.map(h=>parseInt(h.split(":")[0],10)));
+  let streak = 0;
+  for (let h = horaAtual; h >= 11; h--) {
+    if (!set.has(h)) streak++; else break;
+}
+  return streak;
+}
+function projecaoFinal(saldoAtual, qtdSemana, diasDecorridos, diasTotais) {
+  if (diasDecorridos <= 0) return saldoAtual;
+  const ritmo = qtdSemana / diasDecorridos; // alertas por dia
+  const restantes = diasTotais - diasDecorridos;
+  const projAlertas = qtdSemana + Math.round(ritmo * restantes);
+  return Math.max(0, PREMIO_INICIAL_PADRAO - projAlertas * PERDA_PADRAO);
+}
+function badgesPara(qtdHoje, qtdSemana, saldo) {
+  const out = [];
+  if (qtdHoje === 0) out.push({t:"Dia Perfeito", cls:"green", icon:"<22><>"});
+      if (qtdSemana <= 4) out.push({t:"Semana Limpa", cls:"green", icon:"<>"});
+      if (saldo >= 1000) out.push({t:"Meta Batida", cls:"", icon:"<>"});
+  if (qtdHoje >= 5) out.push({t:"Em Risco", cls:"red", icon:"<><>"});
+  return out;
+  }
+function fraseMotivacional(saldo, qtdHoje) {
+  if (saldo >= 1200 && qtdHoje <= 1) return {t:"Excelente! Continue assim", cls:"win"};
+  if (saldo >= 800) return {t:"Bom ritmo - mantenha o foco", cls:"win"};
+  if (saldo >= 400) return {t:"Cuidado, o premio esta derretendo", cls:"warn"};
+  return {t:"Ultima chance de recuperar!", cls:"urg"};
+}
+function progressoClass(pct) {
+  if (pct >= 60) return "";
+  if (pct >= 30) return "warn";
+  return "danger";
+}
+function sparklinePath(values, w, h) {
+  const max = Math.max(...values, 1);
+  const min = 0;
+  const step = w / Math.max(values.length - 1, 1);
+  return values.map((v,i)=>{
+    const x = i*step;
+    const y = h - ((v - min) / (max - min || 1)) * (h - 4) - 2;
+    return (i===0?"M":"L") + x.toFixed(1) + "," + y.toFixed(1);
+}).join(" ");
+}
+
+async function carregar() {
+  let historico = {}, config = {lojas: {}};
+  try { historico = await fetch(HISTORICO_URL + "?t="+Date.now()).then(r=>r.json()); } catch(e) {}
+  try { config = await fetch(CONFIG_URL + "?t="+Date.now()).then(r=>r.ok?r.json():{lojas:{}}); } catch(e) {}
+  return {historico, config};
+}
+
+function renderClock() {
+  const now = new Date();
+  document.getElementById("data").textContent =
+    now.toLocaleDateString("pt-BR", {weekday:"long", day:"2-digit", month:"long", year:"numeric"});
+  document.getElementById("hora").textContent =
+    String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+}
+
+function render(data) {
+  const {historico, config} = data;
+  const lojasMap = {};
+  Object.keys(LOJAS_DEFAULT).forEach(id=>{
+    const cfg = (config.lojas && config.lojas[id]) || {};
+    lojasMap[id] = cfg.nome || LOJAS_DEFAULT[id];
+});
+  const dias = diasSemanaAtual(historico);
+  const hoje = hojeBR();
+  const idxHoje = dias.indexOf(hoje);
+  const diasDecorridos = idxHoje >= 0 ? idxHoje + 1 : dias.length;
+  const ciclo_dias = (config.ciclo_dias) || CICLO_DIAS_PADRAO;
+  const horaAtual = new Date().getHours();
+
+  // Computa para cada loja
+  const lista = Object.keys(lojasMap).map(id=>{
+    const nome = lojasMap[id];
+    const alertasHoje = alertasNo(historico, id, hoje);
+    const qtdHoje = alertasHoje.length;
+    const qtdSemana = totalSemana(historico, id, dias);
+    const saldo = calcularSaldo(config, id, qtdSemana);
+    const inicial = (config.lojas && config.lojas[id] && config.lojas[id].premio_inicial) || PREMIO_INICIAL_PADRAO;
+    const pct = (saldo / inicial) * 100;
+    const streak = streakSemAlerta(alertasHoje, Math.min(horaAtual, 22));
+    const proj = projecaoFinal(saldo, qtdSemana, diasDecorridos, ciclo_dias);
+    const badges = badgesPara(qtdHoje, qtdSemana, saldo);
+    const frase = fraseMotivacional(saldo, qtdHoje);
+    // serie semanal (qtd alertas por dia)
+    const serieAlertas = dias.map(d=>alertasNo(historico,id,d).length);
+    return {id, nome, alertasHoje, qtdHoje, qtdSemana, saldo, inicial, pct, streak, proj, badges, frase, serieAlertas};
+});
+
+  // ranking por saldo
+  const ranking = [...lista].sort((a,b)=>b.saldo - a.saldo);
+
+  // PODIO (ordem: 2 - 1 - 3 visualmente)
+  const podiumEl = document.getElementById("podium");
+  podiumEl.innerHTML = "";
+  const ordem = [1,0,2]; // 2o, 1o, 3o
+  const classes = ["second","first","third"];
+  const trofeus = ["[2]","[1]","[3]"];
+  const labels = ["2 LUGAR","CAMPEAO","3 LUGAR"];
+  ordem.forEach((idx,i)=>{
+        const r = ranking[idx]; if(!r) return;
+    const div = document.createElement("div");
+    div.className = "podium-card " + classes[i];
+    div.innerHTML =
+            '<span class="trophy">'+trofeus[i]+'</span>' +
+            '<div class="pos">'+labels[i]+'</div>' +
+            '<div class="nome">'+r.nome+'</div>' +
+            '<div class="saldo">R$ '+r.saldo.toFixed(0)+'</div>' +
+            '<div class="lab">Saldo atual do premio</div>';
+    podiumEl.appendChild(div);
+  });
+
+  // GRID
+  const gridEl = document.getElementById("grid");
+  gridEl.innerHTML = "";
+  lista.forEach(r=>{
+    const pctClass = progressoClass(r.pct);
+    const projClass = r.proj < r.saldo * 0.7 ? "bad" : "";
+    const streakHTML = r.streak >= 2
+      ? '<div class="streak"><span class="fire">[F]</span><div><b>'+r.streak+' horas seguidas</b> sem alerta - mantenha a sequencia!</div></div>'
+      : '<div class="streak cold"><span class="fire">[-]</span><div>Sem sequencia ativa neste momento</div></div>';
+    const badgesHTML = r.badges.length
+      ? r.badges.map(b=>'<span class="badge '+b.cls+'">'+b.t+'</span>').join("")
+      : '<span class="badge" style="opacity:.4">sem conquistas hoje</span>';
+
+    // sparkline
+    const W = 220, H = 40;
+    const path = sparklinePath(r.serieAlertas, W, H);
+    const sparkSVG =
+      '<svg class="sparkline" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none">' +
+      '<path d="'+path+'" fill="none" stroke="url(#gold)" stroke-width="2"/>' +
+      '<defs><linearGradient id="gold" x1="0" x2="1"><stop offset="0%" stop-color="#ffd24a"/><stop offset="100%" stop-color="#f5a623"/></linearGradient></defs>' +
+      '</svg>';
+
+    const div = document.createElement("div");
+    div.className = "loja";
+    div.innerHTML =
+      '<h2>'+r.nome+'</h2>' +
+      '<div class="badges">'+badgesHTML+'</div>' +
+      '<div class="saldo-line"><div class="saldo-big">R$ '+r.saldo.toFixed(0)+'</div><div class="saldo-pct">'+r.pct.toFixed(0)+'% do premio</div></div>' +
+      '<div class="progress"><div class="progress-fill '+pctClass+'" style="width:'+r.pct.toFixed(1)+'%"></div></div>' +
+      '<div class="stat-row">' +
+        '<div class="stat"><div class="v gold">'+r.qtdHoje+'</div><div class="l">Alertas hoje</div></div>' +
+        '<div class="stat"><div class="v">'+r.qtdSemana+'</div><div class="l">Na semana</div></div>' +
+      '</div>' +
+      streakHTML +
+      '<div class="projecao '+projClass+'">Projecao fim do ciclo: <span class="v">R$ '+r.proj.toFixed(0)+'</span></div>' +
+      sparkSVG +
+      '<div class="frase '+r.frase.cls+'">"'+r.frase.t+'"</div>';
+    gridEl.appendChild(div);
+});
+
+  // H2H
+  const h2hEl = document.getElementById("h2h");
+  h2hEl.innerHTML = "";
+  for (let i=0;i<ranking.length-1;i++){
+    const a = ranking[i], b = ranking[i+1];
+    const diff = a.saldo - b.saldo;
+    const row = document.createElement("div");
+    row.className = "h2h-row";
+    row.innerHTML =
+      '<span><b>'+a.nome+'</b></span>' +
+      '<span class="vs">VS</span>' +
+      '<span><b>'+b.nome+'</b></span>' +
+      '<span class="diff pos">+R$ '+diff.toFixed(0)+' a frente</span>';
+    h2hEl.appendChild(row);
+}
+  // lider vs ultimo
+  if (ranking.length >= 3) {
+    const a = ranking[0], b = ranking[ranking.length-1];
+    const diff = a.saldo - b.saldo;
+    const row = document.createElement("div");
+    row.className = "h2h-row";
+    row.innerHTML =
+      '<span><b>Lider:</b> '+a.nome+'</span>' +
+      '<span class="vs">vs</span>' +
+      '<span><b>Lanterna:</b> '+b.nome+'</span>' +
+      '<span class="diff pos">gap de R$ '+diff.toFixed(0)+'</span>';
+    h2hEl.appendChild(row);
+}
+}
+
+async function main() {
+  renderClock();
+  setInterval(renderClock, 1000);
+  const data = await carregar();
+  render(data);
+  setInterval(async ()=>{ const d = await carregar(); render(d); }, 60000);
+}
+main();
+</script>
+</body>
+</html>
