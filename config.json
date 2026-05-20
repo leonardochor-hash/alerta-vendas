@@ -7,7 +7,7 @@
       "nome": "Rio Sul",
       "perda_por_alerta": 50,
       "premio_inicial": 1500,
-      "saldo_atual": 450
+      "saldo_atual": 350
     },
     "3": {
       "ciclo_inicio": "15/05/2026",
@@ -21,7 +21,7 @@
       "nome": "NorteShopping",
       "perda_por_alerta": 50,
       "premio_inicial": 1500,
-      "saldo_atual": 300
+      "saldo_atual": 200
     }
   }
 }
