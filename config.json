@@ -7,7 +7,7 @@
       "nome": "Rio Sul",
       "perda_por_alerta": 50,
       "premio_inicial": 1500,
-      "saldo_atual": 50
+      "saldo_atual": 0.0
     },
     "3": {
       "ciclo_inicio": "15/05/2026",
