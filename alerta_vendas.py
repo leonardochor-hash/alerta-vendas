@@ -197,6 +197,14 @@ def buscar_vendas_janela(data_str, min_ini, min_fim):
         total_rows = 0
         matched_rows = 0
 
+        # DEBUG TEMPORARIO: inspecionar estrutura da tabela real
+        all_rows_dbg = soup.select("table tbody tr")
+        print(f"  [DEBUG] total <tr> em tbody: {len(all_rows_dbg)}")
+        for idx, row_dbg in enumerate(all_rows_dbg[:8]):
+            cells_dbg = row_dbg.find_all("td")
+            textos_dbg = [c.get_text(" ", strip=True)[:30] for c in cells_dbg]
+            print(f"  [DEBUG] linha {idx} ({len(cells_dbg)} cols): {textos_dbg}")
+
         for row in soup.select("table tbody tr"):
             cells = row.find_all("td")
             if not cells:
