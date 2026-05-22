@@ -23,6 +23,7 @@ DATA_SIMULADA = os.environ.get("DATA_SIMULADA", "")
 HORA_SIMULADA = os.environ.get("HORA_SIMULADA", "")
 MIN_SIMULADA = os.environ.get("MIN_SIMULADA", "")
 FORCAR_MODO = os.environ.get("FORCAR_MODO", "").strip().lower()
+DRY_RUN = os.environ.get("DRY_RUN", "").strip() == "1"
 
 CONTADOR_FILE = "contadores.json"
 HISTORICO_FILE = "historico.json"
@@ -59,6 +60,9 @@ def carregar_config():
     return {"ciclo_dias": 7, "lojas": {loja_id: {"nome": nome, "premio_inicial": 1500.0, "perda_por_alerta": 50.0, "saldo_atual": 1500.0, "ciclo_inicio": datetime.now().strftime("%d/%m/%Y")} for loja_id, nome in LOJAS.items()}}
 
 def salvar_config(config):
+    if DRY_RUN:
+        print("[DRY_RUN] salvar_config suprimido")
+        return
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
@@ -93,7 +97,8 @@ def descontar_premio(config, loja_id, data_str):
     perda = loja_cfg.get("perda_por_alerta", 50.0)
     saldo_atual, _, _ = calcular_saldo(config, loja_id, data_str)
     novo_saldo = max(0.0, saldo_atual - perda)
-    config["lojas"][loja_id]["saldo_atual"] = novo_saldo
+    if not DRY_RUN:
+        config["lojas"][loja_id]["saldo_atual"] = novo_saldo
     return novo_saldo
 
 def make_session():
@@ -104,26 +109,44 @@ def make_session():
 session = make_session()
 
 def login():
+    """Retorna True somente se o login foi confirmado pela presenca de 'logout' na resposta."""
+    if not SENHA:
+        print("ERRO LOGIN: MOOMBOX_PASSWORD esta vazio. Verifique o secret no GitHub.")
+        return False
     try:
         r = session.get(MOOMBOX_URL + "/user/login", timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
         csrf_tag = soup.find("input", {"name": "_csrf"})
         if not csrf_tag:
-            print("ERRO: csrf nao encontrado")
+            print("ERRO LOGIN: csrf nao encontrado na pagina de login")
             return False
-        csrf = csrf_tag["value"]
-        resp = session.post(MOOMBOX_URL + "/user/login", data={"_csrf": csrf, "login-form[login]": USUARIO, "login-form[password]": SENHA, "login-form[rememberMe]": "0"}, timeout=30)
-        if "logout" in resp.text.lower():
+        csrf = csrf_tag.get("value", "")
+        resp = session.post(
+            MOOMBOX_URL + "/user/login",
+            data={
+                "_csrf": csrf,
+                "login-form[login]": USUARIO,
+                "login-form[password]": SENHA,
+                "login-form[rememberMe]": "0",
+            },
+            timeout=30,
+            allow_redirects=True,
+        )
+        body = resp.text.lower()
+        if "logout" in body:
             print("Login OK")
             return True
-        print("AVISO: Login pode ter falhado (sem logout na resposta)")
-        return True
+        # Tenta detectar mensagem de erro especifica
+        if "senha" in body or "incorret" in body or "invalid" in body:
+            print("ERRO LOGIN: credenciais rejeitadas pelo Moombox.")
+        else:
+            print("ERRO LOGIN: resposta sem 'logout' (login nao confirmado).")
+        return False
     except Exception as e:
-        print(f"ERRO login: {e}")
+        print(f"ERRO LOGIN (excecao): {e}")
         return False
 
 def _to_float_brl(txt):
-    """Converte '1.234,56' ou '1234.56' ou 'R$ 100,00' em float. Retorna None se falhar."""
     if txt is None:
         return None
     s = txt.replace("R$", "").strip()
@@ -137,7 +160,6 @@ def _to_float_brl(txt):
         return None
 
 def _extrair_hora(data_hora_txt):
-    """Recebe '22/05/2026 16:21:29' e devolve (h, m) ou None."""
     if not data_hora_txt:
         return None
     partes = data_hora_txt.replace("\n", " ").split()
@@ -152,10 +174,6 @@ def _extrair_hora(data_hora_txt):
         return None
 
 def buscar_vendas_janela(data_str, min_ini, min_fim):
-    """
-    Le /zoop/financeiro e devolve {loja_id: {'total': float, 'count': int}}
-    filtrando: status succeeded, hora em [min_ini, min_fim) e valor > VALOR_MINIMO.
-    """
     data_enc = data_str + " - " + data_str
     params = {
         "TransacaoPosSearch[data]": data_enc,
@@ -169,36 +187,39 @@ def buscar_vendas_janela(data_str, min_ini, min_fim):
 
     try:
         r = session.get(MOOMBOX_URL + "/zoop/financeiro", params=params, timeout=30)
+        # Detecta se fomos redirecionados para a tela de login
+        if "login-form" in r.text.lower() or "/user/login" in r.url:
+            print("ERRO: /zoop/financeiro retornou pagina de login. Sessao invalida.")
+            return resultado
+
         soup = BeautifulSoup(r.text, "html.parser")
         current_loja = None
+        total_rows = 0
+        matched_rows = 0
 
         for row in soup.select("table tbody tr"):
             cells = row.find_all("td")
             if not cells:
                 continue
-
+            total_rows += 1
             textos = [c.get_text(" ", strip=True) for c in cells]
 
-            # Linha de total
             if any(t.strip().lower() == "total" for t in textos):
                 continue
 
             primeira = textos[0].strip()
             if primeira.isdigit() and primeira in LOJAS:
                 current_loja = primeira
-                # Layout 17 cols: [0]=Loja,[1]=CodAut,[2]=Data,[3]=VlCred,[4]=VlOper,[5]=Tipo,...,[13]=Status
                 data_hora_txt = textos[2] if len(textos) > 2 else ""
                 valor_op_txt = textos[4] if len(textos) > 4 else ""
                 status_txt = textos[13] if len(textos) > 13 else ""
             else:
-                # Layout 16 cols (sem coluna Loja, herda current_loja)
                 data_hora_txt = textos[1] if len(textos) > 1 else ""
                 valor_op_txt = textos[3] if len(textos) > 3 else ""
                 status_txt = textos[12] if len(textos) > 12 else ""
 
             if current_loja not in LOJAS:
                 continue
-
             if status_txt and status_txt.lower() not in ("", "succeeded"):
                 continue
 
@@ -216,7 +237,9 @@ def buscar_vendas_janela(data_str, min_ini, min_fim):
 
             resultado[current_loja]["total"] += valor
             resultado[current_loja]["count"] += 1
+            matched_rows += 1
 
+        print(f"  [parser] linhas da tabela: {total_rows} | linhas validas no intervalo: {matched_rows}")
     except Exception as e:
         print(f"ERRO buscar Zoop {data_str}: {e}")
 
@@ -232,6 +255,9 @@ def carregar_contadores():
     return {}
 
 def salvar_contadores(contadores):
+    if DRY_RUN:
+        print("[DRY_RUN] salvar_contadores suprimido")
+        return
     with open(CONTADOR_FILE, "w") as f:
         json.dump(contadores, f, indent=2)
 
@@ -245,6 +271,9 @@ def carregar_historico():
     return {}
 
 def salvar_historico(historico):
+    if DRY_RUN:
+        print("[DRY_RUN] salvar_historico suprimido")
+        return
     with open(HISTORICO_FILE, "w", encoding="utf-8") as f:
         json.dump(historico, f, indent=2, ensure_ascii=False)
 
@@ -258,6 +287,9 @@ def registrar_alerta_historico(historico, data_str, hora_ref, loja_id):
         historico[data_str][loja_id].append(hora_str)
 
 def enviar_email(assunto, corpo, html=None):
+    if DRY_RUN:
+        print(f"[DRY_RUN] Email NAO enviado: {assunto}")
+        return
     if not GMAIL_APP_PASSWORD:
         print("AVISO: GMAIL_APP_PASSWORD nao configurado. Email nao enviado.")
         return
@@ -281,6 +313,9 @@ def montar_html(corpo):
     return "<pre style='font-family:monospace'>" + linhas + "</pre>"
 
 def enviar_whatsapp(msg):
+    if DRY_RUN:
+        print("[DRY_RUN] WhatsApp suprimido")
+        return
     if not WHATSAPP_APIKEY:
         return
     try:
@@ -313,7 +348,7 @@ def executar_previa(agora_br, data_str, weekday, grade):
         print(f"Previa fora da janela ({pi}h-{pf}h). Hora atual: {hora}h.")
         return
     if not login():
-        print("ERRO: Login falhou na previa. Abortando previa.")
+        print("ABORTANDO previa: login falhou. Nenhum alerta sera processado.")
         return
     min_ini = hora * 60
     min_fim = hora * 60 + 45
@@ -349,7 +384,7 @@ def executar_oficial(agora_br, data_str, weekday, grade):
         return
     hora_ref_atual = hora - 1
     if not login():
-        print("ERRO: Login falhou. Abortando oficial.")
+        print("ABORTANDO oficial: login falhou. Nenhum alerta sera processado nem nenhum desconto aplicado.")
         return
     contadores = carregar_contadores()
     config = carregar_config()
@@ -455,6 +490,8 @@ def executar_oficial(agora_br, data_str, weekday, grade):
     print("Contadores:", contadores)
 
 def main():
+    if DRY_RUN:
+        print("=== MODO DRY-RUN: nenhum email sera enviado e nenhum arquivo sera modificado ===")
     if DATA_SIMULADA:
         hora_str = normalizar_hora(HORA_SIMULADA) if HORA_SIMULADA else "12:00"
         agora_br = datetime.strptime(DATA_SIMULADA + " " + hora_str, "%d/%m/%Y %H:%M")
