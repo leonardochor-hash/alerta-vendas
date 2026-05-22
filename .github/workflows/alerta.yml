@@ -1,14 +1,12 @@
 name: Alerta Inatividade Vendas
 
 on:
-  schedule:
-    # OFICIAIS - minuto :00 (cobrem 11h-22h BRT seg-sab e 15h-21h BRT dom/feriado)
-    # BRT = UTC-3, sem horario de verao em 2026. O script filtra horarios validos.
-    - cron: "0 13-23 * * *"
-    - cron: "0 0-1 * * *"
-    # PREVIAS - minuto :45 (cobrem 10h-21h BRT seg-sab e 14h-20h BRT dom/feriado)
-    - cron: "45 13-23 * * *"
-    - cron: "45 0 * * *"
+  # CRONS DESABILITADOS TEMPORARIAMENTE - aguardando correcao do login Moombox
+  # schedule:
+  #   - cron: "0 13-23 * * *"
+  #   - cron: "0 0-1 * * *"
+  #   - cron: "45 13-23 * * *"
+  #   - cron: "45 0 * * *"
 
   workflow_dispatch:
     inputs:
@@ -28,6 +26,10 @@ on:
         description: "Forcar modo: oficial | previa | (vazio = auto pelo minuto)"
         required: false
         default: ""
+      dry_run:
+        description: "Dry-run: 1 = nao envia email, nao altera arquivos (apenas logs)"
+        required: false
+        default: "1"
 
 permissions:
   contents: write
@@ -59,10 +61,11 @@ jobs:
           DATA_SIMULADA: ${{ github.event.inputs.data_simulada }}
           MIN_SIMULADA: ${{ github.event.inputs.min_simulada }}
           FORCAR_MODO: ${{ github.event.inputs.forcar_modo }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: python alerta_vendas.py
 
       - name: Publicar dados no repositorio
-        if: always()
+        if: ${{ always() && github.event.inputs.dry_run != '1' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
