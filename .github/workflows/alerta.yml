@@ -1,12 +1,14 @@
 name: Alerta Inatividade Vendas
 
 on:
-  # CRONS DESABILITADOS TEMPORARIAMENTE - aguardando correcao do login Moombox
-  # schedule:
-  #   - cron: "0 13-23 * * *"
-  #   - cron: "0 0-1 * * *"
-  #   - cron: "45 13-23 * * *"
-  #   - cron: "45 0 * * *"
+  schedule:
+    # OFICIAIS - minuto :00 (cobrem 11h-22h BRT seg-sab e 15h-21h BRT dom/feriado)
+    # BRT = UTC-3, sem horario de verao em 2026.
+    - cron: "0 13-23 * * *"
+    - cron: "0 0-1 * * *"
+    # PREVIAS - minuto :45
+    - cron: "45 13-23 * * *"
+    - cron: "45 0 * * *"
 
   workflow_dispatch:
     inputs:
@@ -29,7 +31,7 @@ on:
       dry_run:
         description: "Dry-run: 1 = nao envia email, nao altera arquivos (apenas logs)"
         required: false
-        default: "1"
+        default: "0"
 
 permissions:
   contents: write
