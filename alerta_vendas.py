@@ -49,7 +49,6 @@ def get_grade(data_str, weekday):
         return {"oficial_inicio": 15, "oficial_fim": 21, "previa_inicio": 14, "previa_fim": 20}
     return {"oficial_inicio": 11, "oficial_fim": 22, "previa_inicio": 10, "previa_fim": 21}
 
-
 def carregar_config():
     if os.path.exists(CONFIG_FILE):
         try:
@@ -123,51 +122,104 @@ def login():
         print(f"ERRO login: {e}")
         return False
 
+def _to_float_brl(txt):
+    """Converte '1.234,56' ou '1234.56' ou 'R$ 100,00' em float. Retorna None se falhar."""
+    if txt is None:
+        return None
+    s = txt.replace("R$", "").strip()
+    if not s or s == "-":
+        return None
+    if "," in s:
+        s = s.replace(".", "").replace(",", ".")
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+def _extrair_hora(data_hora_txt):
+    """Recebe '22/05/2026 16:21:29' e devolve (h, m) ou None."""
+    if not data_hora_txt:
+        return None
+    partes = data_hora_txt.replace("\n", " ").split()
+    if len(partes) < 2:
+        return None
+    hms = partes[1].split(":")
+    if len(hms) < 2:
+        return None
+    try:
+        return int(hms[0]), int(hms[1])
+    except ValueError:
+        return None
 
 def buscar_vendas_janela(data_str, min_ini, min_fim):
+    """
+    Le /zoop/financeiro e devolve {loja_id: {'total': float, 'count': int}}
+    filtrando: status succeeded, hora em [min_ini, min_fim) e valor > VALOR_MINIMO.
+    """
     data_enc = data_str + " - " + data_str
-    params = {"TransacaoPosSearch[data]": data_enc, "TransacaoPosSearch[status]": "succeeded", "TransacaoPosSearch[authorization_code]": "", "TransacaoPosSearch[tipo_pagamento]": "", "TransacaoPosSearch[entry_mode]": "", "TransacaoPosSearch[id_zoop]": ""}
+    params = {
+        "TransacaoPosSearch[data]": data_enc,
+        "TransacaoPosSearch[status]": "succeeded",
+        "TransacaoPosSearch[authorization_code]": "",
+        "TransacaoPosSearch[tipo_pagamento]": "",
+        "TransacaoPosSearch[entry_mode]": "",
+        "TransacaoPosSearch[id_zoop]": "",
+    }
     resultado = {loja_id: {"total": 0.0, "count": 0} for loja_id in LOJAS}
+
     try:
         r = session.get(MOOMBOX_URL + "/zoop/financeiro", params=params, timeout=30)
         soup = BeautifulSoup(r.text, "html.parser")
         current_loja = None
+
         for row in soup.select("table tbody tr"):
             cells = row.find_all("td")
-            if len(cells) == 17:
-                loja_candidata = cells[1].get_text(strip=True)
-                if loja_candidata and loja_candidata != "Total":
-                    current_loja = loja_candidata
-                data_hora = cells[3].get_text(strip=True)
-                valor_op = cells[5].get_text(strip=True)
-            elif len(cells) == 16:
-                if cells[1].get_text(strip=True) == "Total":
-                    continue
-                data_hora = cells[2].get_text(strip=True)
-                valor_op = cells[4].get_text(strip=True)
-            else:
+            if not cells:
                 continue
+
+            textos = [c.get_text(" ", strip=True) for c in cells]
+
+            # Linha de total
+            if any(t.strip().lower() == "total" for t in textos):
+                continue
+
+            primeira = textos[0].strip()
+            if primeira.isdigit() and primeira in LOJAS:
+                current_loja = primeira
+                # Layout 17 cols: [0]=Loja,[1]=CodAut,[2]=Data,[3]=VlCred,[4]=VlOper,[5]=Tipo,...,[13]=Status
+                data_hora_txt = textos[2] if len(textos) > 2 else ""
+                valor_op_txt = textos[4] if len(textos) > 4 else ""
+                status_txt = textos[13] if len(textos) > 13 else ""
+            else:
+                # Layout 16 cols (sem coluna Loja, herda current_loja)
+                data_hora_txt = textos[1] if len(textos) > 1 else ""
+                valor_op_txt = textos[3] if len(textos) > 3 else ""
+                status_txt = textos[12] if len(textos) > 12 else ""
+
             if current_loja not in LOJAS:
                 continue
-            try:
-                partes = data_hora.split(" ")[1].split(":")
-                h = int(partes[0])
-                m = int(partes[1])
-                t_min = h * 60 + m
-                if not (min_ini <= t_min < min_fim):
-                    continue
-            except Exception:
+
+            if status_txt and status_txt.lower() not in ("", "succeeded"):
                 continue
-            try:
-                valor = float(valor_op.replace(",", ".").replace("R$", "").strip())
-                if valor <= VALOR_MINIMO:
-                    continue
-                resultado[current_loja]["total"] += valor
-                resultado[current_loja]["count"] += 1
-            except Exception:
-                pass
+
+            hora = _extrair_hora(data_hora_txt)
+            if hora is None:
+                continue
+            h, m = hora
+            t_min = h * 60 + m
+            if not (min_ini <= t_min < min_fim):
+                continue
+
+            valor = _to_float_brl(valor_op_txt)
+            if valor is None or valor <= VALOR_MINIMO:
+                continue
+
+            resultado[current_loja]["total"] += valor
+            resultado[current_loja]["count"] += 1
+
     except Exception as e:
         print(f"ERRO buscar Zoop {data_str}: {e}")
+
     return resultado
 
 def carregar_contadores():
@@ -226,7 +278,7 @@ def enviar_email(assunto, corpo, html=None):
 
 def montar_html(corpo):
     linhas = corpo.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    return "<pre style=\'font-family:monospace\'>" + linhas + "</pre>"
+    return "<pre style='font-family:monospace'>" + linhas + "</pre>"
 
 def enviar_whatsapp(msg):
     if not WHATSAPP_APIKEY:
@@ -241,7 +293,6 @@ def enviar_whatsapp(msg):
             print(f"AVISO WhatsApp: status {r.status_code}")
     except Exception as e:
         print(f"ERRO WhatsApp (nao critico): {e}")
-
 
 def normalizar_hora(h_str):
     h_str = h_str.strip()
@@ -274,7 +325,7 @@ def executar_previa(agora_br, data_str, weekday, grade):
         print(f"  {loja_nome}: {count} vendas validas | R$ {total:.2f}")
         if count == 0:
             if dia_sem_email(data_str, weekday):
-                print(f"   -> sem venda mas dia sem email ({loja_nome}). Sem aviso.")
+                print(f"  -> sem venda mas dia sem email ({loja_nome}). Sem aviso.")
                 continue
             assunto = f"[AVISO 15 MIN] {loja_nome} - faltam 15 min para perder R$ 50"
             linhas = []
@@ -288,7 +339,6 @@ def executar_previa(agora_br, data_str, weekday, grade):
             linhas.append("Acao: agir agora para evitar a perda.")
             corpo = chr(10).join(linhas)
             enviar_email(assunto, corpo, montar_html(corpo))
-
 
 def executar_oficial(agora_br, data_str, weekday, grade):
     hora = agora_br.hour
@@ -382,26 +432,26 @@ def executar_oficial(agora_br, data_str, weekday, grade):
                     partes.append(f"Acao recomendada: {instrucao}")
                     corpo = chr(10).join(partes)
                     enviar_email(assunto, corpo, montar_html(corpo))
-                    print(f"   -> ALERTA #{qtd}: {loja_nome} | Premio: R$ {novo_saldo:.2f}")
+                    print(f"  -> ALERTA #{qtd}: {loja_nome} | Premio: R$ {novo_saldo:.2f}")
                 else:
-                    print(f"   -> Desconto silencioso (dom/feriado): {loja_nome} -R$ 50 | Premio: R$ {novo_saldo:.2f}")
+                    print(f"  -> Desconto silencioso (dom/feriado): {loja_nome} -R$ 50 | Premio: R$ {novo_saldo:.2f}")
                 registrar_alerta_historico(historico, data_str, hora_ref, loja_id)
             else:
                 hora_str_ref = f"{hora_ref:02d}:00"
                 if data_str in historico and loja_id in historico.get(data_str, {}):
                     if hora_str_ref in historico[data_str][loja_id]:
                         historico[data_str][loja_id].remove(hora_str_ref)
-                        if not historico[data_str][loja_id]:
-                            del historico[data_str][loja_id]
-                        if not historico.get(data_str):
-                            del historico[data_str]
+                    if not historico[data_str][loja_id]:
+                        del historico[data_str][loja_id]
+                    if not historico.get(data_str):
+                        del historico[data_str]
                 saldo_atual, _, _ = calcular_saldo(config, loja_id, data_str)
-                print(f"   -> {loja_nome} OK. Premio: R$ {saldo_atual:.2f}")
-    contadores["ultima_data_verificada"] = data_str
-    contadores["ultima_hora_verificada"] = hora_ref_atual
-    salvar_contadores(contadores)
-    salvar_historico(historico)
-    salvar_config(config)
+                print(f"  -> {loja_nome} OK. Premio: R$ {saldo_atual:.2f}")
+        contadores["ultima_data_verificada"] = data_str
+        contadores["ultima_hora_verificada"] = hora_ref_atual
+        salvar_contadores(contadores)
+        salvar_historico(historico)
+        salvar_config(config)
     print("Contadores:", contadores)
 
 def main():
