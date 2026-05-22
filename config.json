@@ -3,25 +3,25 @@
   "ciclo_dias": 7,
   "lojas": {
     "1": {
-      "ciclo_inicio": "15/05/2026",
+      "ciclo_inicio": "22/05/2026",
       "nome": "Rio Sul",
       "perda_por_alerta": 50,
       "premio_inicial": 1500,
-      "saldo_atual": 0.0
+      "saldo_atual": 1450
     },
     "3": {
-      "ciclo_inicio": "15/05/2026",
+      "ciclo_inicio": "22/05/2026",
       "nome": "Barra Shopping",
       "perda_por_alerta": 50,
       "premio_inicial": 1500,
-      "saldo_atual": 0.0
+      "saldo_atual": 1450
     },
     "4": {
-      "ciclo_inicio": "15/05/2026",
+      "ciclo_inicio": "22/05/2026",
       "nome": "NorteShopping",
       "perda_por_alerta": 50,
       "premio_inicial": 1500,
-      "saldo_atual": 0.0
+      "saldo_atual": 1450
     }
   }
 }
