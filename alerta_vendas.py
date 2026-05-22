@@ -174,6 +174,14 @@ def _extrair_hora(data_hora_txt):
         return None
 
 def buscar_vendas_janela(data_str, min_ini, min_fim):
+    """
+    Le /zoop/financeiro e devolve {loja_id: {'total': float, 'count': int}}.
+    A tabela tem SEMPRE 17 colunas:
+      [0]=# seq, [1]=Loja, [2]=CodAut, [3]=Data, [4]=VlCredito, [5]=VlOperacao,
+      [6]=TipoPag, [7]=ZoopTaxa, [8]=TaxaOper%, [9]=Bandeira, [10]=Parcelas,
+      [11]=DataLib, [12]=ModoCaptura, [13]=IDTrans, [14]=Status, [15]=OnBehalf, [16]=RefId
+    Filtra: status succeeded, hora em [min_ini, min_fim) e valor > VALOR_MINIMO.
+    """
     data_enc = data_str + " - " + data_str
     params = {
         "TransacaoPosSearch[data]": data_enc,
@@ -182,54 +190,41 @@ def buscar_vendas_janela(data_str, min_ini, min_fim):
         "TransacaoPosSearch[tipo_pagamento]": "",
         "TransacaoPosSearch[entry_mode]": "",
         "TransacaoPosSearch[id_zoop]": "",
+        "per-page": "200",
     }
     resultado = {loja_id: {"total": 0.0, "count": 0} for loja_id in LOJAS}
 
     try:
         r = session.get(MOOMBOX_URL + "/zoop/financeiro", params=params, timeout=30)
-        # Detecta se fomos redirecionados para a tela de login
         if "login-form" in r.text.lower() or "/user/login" in r.url:
             print("ERRO: /zoop/financeiro retornou pagina de login. Sessao invalida.")
             return resultado
 
         soup = BeautifulSoup(r.text, "html.parser")
-        current_loja = None
         total_rows = 0
         matched_rows = 0
 
-        # DEBUG TEMPORARIO: inspecionar estrutura da tabela real
-        all_rows_dbg = soup.select("table tbody tr")
-        print(f"  [DEBUG] total <tr> em tbody: {len(all_rows_dbg)}")
-        for idx, row_dbg in enumerate(all_rows_dbg[:8]):
-            cells_dbg = row_dbg.find_all("td")
-            textos_dbg = [c.get_text(" ", strip=True)[:30] for c in cells_dbg]
-            print(f"  [DEBUG] linha {idx} ({len(cells_dbg)} cols): {textos_dbg}")
-
         for row in soup.select("table tbody tr"):
             cells = row.find_all("td")
-            if not cells:
+            if len(cells) < 15:
                 continue
             total_rows += 1
             textos = [c.get_text(" ", strip=True) for c in cells]
 
+            # Ignora linhas de Total (footer)
             if any(t.strip().lower() == "total" for t in textos):
                 continue
 
-            primeira = textos[0].strip()
-            if primeira.isdigit() and primeira in LOJAS:
-                current_loja = primeira
-                data_hora_txt = textos[2] if len(textos) > 2 else ""
-                valor_op_txt = textos[4] if len(textos) > 4 else ""
-                status_txt = textos[13] if len(textos) > 13 else ""
-            else:
-                data_hora_txt = textos[1] if len(textos) > 1 else ""
-                valor_op_txt = textos[3] if len(textos) > 3 else ""
-                status_txt = textos[12] if len(textos) > 12 else ""
+            loja_id = textos[1].strip()
+            if loja_id not in LOJAS:
+                continue
 
-            if current_loja not in LOJAS:
+            status_txt = textos[14].strip().lower() if len(textos) > 14 else ""
+            if status_txt and status_txt != "succeeded":
                 continue
-            if status_txt and status_txt.lower() not in ("", "succeeded"):
-                continue
+
+            data_hora_txt = textos[3] if len(textos) > 3 else ""
+            valor_op_txt = textos[5] if len(textos) > 5 else ""
 
             hora = _extrair_hora(data_hora_txt)
             if hora is None:
@@ -243,11 +238,11 @@ def buscar_vendas_janela(data_str, min_ini, min_fim):
             if valor is None or valor <= VALOR_MINIMO:
                 continue
 
-            resultado[current_loja]["total"] += valor
-            resultado[current_loja]["count"] += 1
+            resultado[loja_id]["total"] += valor
+            resultado[loja_id]["count"] += 1
             matched_rows += 1
 
-        print(f"  [parser] linhas da tabela: {total_rows} | linhas validas no intervalo: {matched_rows}")
+        print(f"  [parser] linhas validas (cols>=15): {total_rows} | linhas dentro do intervalo: {matched_rows}")
     except Exception as e:
         print(f"ERRO buscar Zoop {data_str}: {e}")
 
