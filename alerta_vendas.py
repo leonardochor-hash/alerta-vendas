@@ -407,6 +407,10 @@ def executar_previa(agora_br, data_str, weekday, grade):
             linhas.append("Acao: agir agora para evitar a perda.")
             corpo = chr(10).join(linhas)
             enviar_email(assunto, corpo, montar_html(corpo))
+            # FIX G: WhatsApp em paralelo na previa
+            msg_wa = (f"AVISO 15min [{loja_nome}] {hora:02d}:00-{hora:02d}:45 sem venda valida.\n"
+                      f"Se nao houver venda ate {hora:02d}:59, R$ 50 sao descontados.")
+            enviar_whatsapp(msg_wa)
 
 def executar_oficial(agora_br, data_str, weekday, grade):
     hora = agora_br.hour
@@ -453,6 +457,9 @@ def executar_oficial(agora_br, data_str, weekday, grade):
             partes.append("Boa sorte e boas vendas!")
             corpo_abertura = chr(10).join(partes)
             enviar_email(assunto_abertura, corpo_abertura, montar_html(corpo_abertura))
+            # FIX G: WhatsApp em paralelo - mensagem mais compacta
+            msg_wa = f"[ABERTURA {data_str} {hora}h]\n" + "\n".join(linhas_saldo) + "\nBoa sorte!"
+            enviar_whatsapp(msg_wa)
             print("Mensagem de abertura enviada.")
         else:
             print("Dia sem email (dom/feriado). Mensagem de abertura suprimida.")
@@ -507,6 +514,11 @@ def executar_oficial(agora_br, data_str, weekday, grade):
                     partes.append(f"Acao recomendada: {instrucao}")
                     corpo = chr(10).join(partes)
                     enviar_email(assunto, corpo, montar_html(corpo))
+                    # FIX G: WhatsApp em paralelo - mensagem compacta
+                    msg_wa = (f"ALERTA [{loja_nome}] {hora_ref:02d}h sem vendas (#{qtd} hoje)\n"
+                              f"Premio: R$ {novo_saldo:.2f} (-R$ {saldo_antes - novo_saldo:.2f})\n"
+                              f"Acao: {instrucao}")
+                    enviar_whatsapp(msg_wa)
                     print(f"  -> ALERTA #{qtd}: {loja_nome} | Premio: R$ {novo_saldo:.2f}")
                 else:
                     print(f"  -> Desconto silencioso (dom/feriado): {loja_nome} -R$ 50 | Premio: R$ {novo_saldo:.2f}")
