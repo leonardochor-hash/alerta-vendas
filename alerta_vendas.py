@@ -29,7 +29,8 @@ CONTADOR_FILE = "contadores.json"
 HISTORICO_FILE = "historico.json"
 CONFIG_FILE = "config.json"
 
-VALOR_MINIMO = 80.0
+# FIX B: VALOR_MINIMO=0 - qualquer venda valida (succeeded) conta como atividade.
+VALOR_MINIMO = 0.0
 
 LOJAS = {"1": "Rio Sul", "3": "Barra Shopping", "4": "NorteShopping"}
 
@@ -46,8 +47,10 @@ def dia_sem_email(data_str, weekday):
     return data_str in FERIADOS or weekday == 6
 
 def get_grade(data_str, weekday):
+    # FIX C: domingo (weekday=6) e feriados: oficial 14h-21h, previa 13h-20h.
     if dia_sem_email(data_str, weekday):
-        return {"oficial_inicio": 15, "oficial_fim": 21, "previa_inicio": 14, "previa_fim": 20}
+        return {"oficial_inicio": 14, "oficial_fim": 21, "previa_inicio": 13, "previa_fim": 20}
+    # Seg-sab: oficial 11h-22h, previa 10h-21h.
     return {"oficial_inicio": 11, "oficial_fim": 22, "previa_inicio": 10, "previa_fim": 21}
 
 def carregar_config():
@@ -136,7 +139,6 @@ def login():
         if "logout" in body:
             print("Login OK")
             return True
-        # Tenta detectar mensagem de erro especifica
         if "senha" in body or "incorret" in body or "invalid" in body:
             print("ERRO LOGIN: credenciais rejeitadas pelo Moombox.")
         else:
@@ -204,6 +206,10 @@ def buscar_vendas_janela(data_str, min_ini, min_fim):
         total_rows = 0
         matched_rows = 0
 
+        # FIX: tratar rowspan da coluna Loja. Quando ha varias vendas da mesma loja,
+        # a tabela usa rowspan na celula da loja, fazendo as linhas seguintes terem
+        # 16 colunas em vez de 17. Vamos propagar o ultimo loja_id visto.
+        last_loja_id = None
         for row in soup.select("table tbody tr"):
             cells = row.find_all("td")
             if len(cells) < 15:
@@ -215,16 +221,37 @@ def buscar_vendas_janela(data_str, min_ini, min_fim):
             if any(t.strip().lower() == "total" for t in textos):
                 continue
 
-            loja_id = textos[1].strip()
+            # Detectar onde esta a coluna Data (formato dd/mm/yyyy hh:mm:ss)
+            import re
+            data_idx = -1
+            for i, t in enumerate(textos):
+                if re.match(r"\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2}", t):
+                    data_idx = i
+                    break
+            if data_idx == -1:
+                continue
+
+            # Loja: se cells tem 17 cols, loja esta em [1]; se tem 16, loja vem do rowspan anterior.
+            if len(textos) >= 17 and data_idx == 3:
+                loja_id = textos[1].strip()
+                last_loja_id = loja_id
+            else:
+                loja_id = last_loja_id
             if loja_id not in LOJAS:
                 continue
 
-            status_txt = textos[14].strip().lower() if len(textos) > 14 else ""
+            # Os indices relativos a partir de data_idx:
+            # data_idx+0=Data, +1=VlCredito, +2=VlOperacao, ..., +11=Status
+            status_idx = data_idx + 11
+            valor_idx = data_idx + 2
+            if status_idx >= len(textos):
+                continue
+            status_txt = textos[status_idx].strip().lower()
             if status_txt and status_txt != "succeeded":
                 continue
 
-            data_hora_txt = textos[3] if len(textos) > 3 else ""
-            valor_op_txt = textos[5] if len(textos) > 5 else ""
+            data_hora_txt = textos[data_idx]
+            valor_op_txt = textos[valor_idx] if valor_idx < len(textos) else ""
 
             hora = _extrair_hora(data_hora_txt)
             if hora is None:
@@ -371,7 +398,7 @@ def executar_previa(agora_br, data_str, weekday, grade):
             linhas.append("=" * 45)
             linhas.append(f"Loja: {loja_nome}")
             linhas.append(f"Janela observada: {hora:02d}:00 - {hora:02d}:45")
-            linhas.append("Nenhuma venda valida (acima de R$ 80) registrada.")
+            linhas.append("Nenhuma venda valida registrada.")
             linhas.append("Se nao houver venda ate o fim da hora, R$ 50 serao descontados do premio.")
             linhas.append("=" * 45)
             linhas.append("Acao: agir agora para evitar a perda.")
@@ -392,8 +419,13 @@ def executar_oficial(agora_br, data_str, weekday, grade):
     contadores = carregar_contadores()
     config = carregar_config()
     historico = carregar_historico()
-    if hora == oi:
-        print(f"Primeira oficial do dia ({hora}h). Zerando contadores.")
+
+    # FIX E: resetar contadores quando o dia mudou (nao apenas quando hora==oi).
+    # Isso garante que o sistema funciona mesmo se o primeiro cron do dia nao for o das 11h.
+    ultima_data = contadores.get("ultima_data_verificada", "")
+    dia_mudou = (ultima_data != data_str)
+    if dia_mudou:
+        print(f"Novo dia detectado (ultima={ultima_data}, hoje={data_str}). Zerando contadores.")
         contadores = {f"alerta_{loja_id}": 0 for loja_id in LOJAS}
         salvar_contadores(contadores)
         if not dia_sem_email(data_str, weekday):
@@ -421,25 +453,27 @@ def executar_oficial(agora_br, data_str, weekday, grade):
             print("Mensagem de abertura enviada.")
         else:
             print("Dia sem email (dom/feriado). Mensagem de abertura suprimida.")
-    ultima_data = contadores.get("ultima_data_verificada", "")
+
+    # FIX A + FIX D: backfill desde 'oi' ate hora_ref_atual.
+    # hora_ref_atual = hora - 1. A primeira hora a verificar e 'oi' (11), nao 'oi-1' (10).
+    # Quando o dia mudou ou ultima_hora_verificada e invalida, fazemos backfill completo.
     ultima_hora = contadores.get("ultima_hora_verificada", -1)
     try:
         ultima_hora = int(ultima_hora)
     except Exception:
         ultima_hora = -1
-    if ultima_data == data_str and ultima_hora >= oi - 1:
-        primeira = max(ultima_hora + 1, oi - 1)
-        horas_pendentes = list(range(primeira, hora_ref_atual + 1))
+    if dia_mudou:
+        primeira = oi
     else:
-        horas_pendentes = [hora_ref_atual]
-    if not horas_pendentes:
-        horas_pendentes = [hora_ref_atual]
-    horas_pendentes = [h for h in horas_pendentes if (oi - 1) <= h <= (of_ - 1)]
+        primeira = max(ultima_hora + 1, oi)
+    horas_pendentes = list(range(primeira, hora_ref_atual + 1))
+    # Filtra: hora_ref deve estar dentro de [oi, of_-1] (11..21 em seg-sab; 14..20 em dom).
+    horas_pendentes = [h for h in horas_pendentes if oi <= h <= (of_ - 1)]
     print(f"Horas oficiais pendentes: {horas_pendentes} (ultima registrada: {ultima_data} {ultima_hora}h)")
     for hora_ref in horas_pendentes:
         min_ini = hora_ref * 60
         min_fim = (hora_ref + 1) * 60
-        print(f"Verificando vendas > R$ {VALOR_MINIMO:.0f}: {data_str} {hora_ref:02d}:00 ate {hora_ref:02d}:59")
+        print(f"Verificando vendas: {data_str} {hora_ref:02d}:00 ate {hora_ref:02d}:59")
         vendas = buscar_vendas_janela(data_str, min_ini, min_fim)
         for loja_id, loja_nome in LOJAS.items():
             total = vendas[loja_id]["total"]
@@ -461,7 +495,7 @@ def executar_oficial(agora_br, data_str, weekday, grade):
                     partes.append("=" * 45)
                     partes.append(f"Loja: {loja_nome}")
                     partes.append(f"Hora verificada: {hora_ref:02d}:00 - {hora_ref:02d}:59")
-                    partes.append(f"Sem vendas > R$ {VALOR_MINIMO:.0f} nesse periodo")
+                    partes.append(f"Sem vendas nesse periodo")
                     partes.append(f"Alertas hoje: #{qtd}")
                     partes.append("=" * 45)
                     partes.append(f"Ciclo: {ciclo_ini} ({dias_ciclo} dia(s) de {ciclo_dias})")
@@ -485,11 +519,11 @@ def executar_oficial(agora_br, data_str, weekday, grade):
                         del historico[data_str]
                 saldo_atual, _, _ = calcular_saldo(config, loja_id, data_str)
                 print(f"  -> {loja_nome} OK. Premio: R$ {saldo_atual:.2f}")
-        contadores["ultima_data_verificada"] = data_str
-        contadores["ultima_hora_verificada"] = hora_ref_atual
-        salvar_contadores(contadores)
-        salvar_historico(historico)
-        salvar_config(config)
+    contadores["ultima_data_verificada"] = data_str
+    contadores["ultima_hora_verificada"] = hora_ref_atual
+    salvar_contadores(contadores)
+    salvar_historico(historico)
+    salvar_config(config)
     print("Contadores:", contadores)
 
 def main():
