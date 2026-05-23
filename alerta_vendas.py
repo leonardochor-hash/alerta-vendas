@@ -13,7 +13,7 @@ USUARIO = "moombox"
 SENHA = os.environ.get("MOOMBOX_PASSWORD", "")
 
 EMAIL_REMETENTE = os.environ.get("EMAIL_USER", "") or "cap00leonardo@gmail.com"
-EMAIL_DESTINATARIO = os.environ.get("EMAIL_DEST", "") or "leonardochor@gmail.com"
+EMAIL_DESTINATARIO = os.environ.get("EMAIL_DEST", "") or "cap00leonardo@gmail.com"
 GMAIL_APP_PASSWORD = os.environ.get("EMAIL_PASS", "") or ""
 
 # WhatsApp via Twilio (FIX H)
