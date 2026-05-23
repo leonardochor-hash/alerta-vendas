@@ -29,8 +29,9 @@ CONTADOR_FILE = "contadores.json"
 HISTORICO_FILE = "historico.json"
 CONFIG_FILE = "config.json"
 
-# FIX B: VALOR_MINIMO=0 - qualquer venda valida (succeeded) conta como atividade.
-VALOR_MINIMO = 0.0
+# FIX B (ajustado): venda minima > R$ 80 para contar como atividade.
+# Vendas de valor menor ou igual a R$ 80 nao sao consideradas (provavel teste ou venda residual).
+VALOR_MINIMO = 80.0
 
 LOJAS = {"1": "Rio Sul", "3": "Barra Shopping", "4": "NorteShopping"}
 
