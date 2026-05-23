@@ -47,11 +47,13 @@ def dia_sem_email(data_str, weekday):
     return data_str in FERIADOS or weekday == 6
 
 def get_grade(data_str, weekday):
-    # FIX C: domingo (weekday=6) e feriados: oficial 14h-21h, previa 13h-20h.
+    # FIX F: incluir a hora de pre-abertura (10h seg-sab, 13h dom) como hora oficial,
+    # para marcar visualmente que a loja deve estar pronta para vender.
+    # Dom/feriado: oficial 13h-21h (loja oficialmente abre 14h, mas 13h e monitorado).
     if dia_sem_email(data_str, weekday):
-        return {"oficial_inicio": 14, "oficial_fim": 21, "previa_inicio": 13, "previa_fim": 20}
-    # Seg-sab: oficial 11h-22h, previa 10h-21h.
-    return {"oficial_inicio": 11, "oficial_fim": 22, "previa_inicio": 10, "previa_fim": 21}
+        return {"oficial_inicio": 13, "oficial_fim": 21, "previa_inicio": 12, "previa_fim": 20}
+    # Seg-sab: oficial 10h-22h (loja oficialmente abre 11h, mas 10h e monitorado).
+    return {"oficial_inicio": 10, "oficial_fim": 22, "previa_inicio": 9, "previa_fim": 21}
 
 def carregar_config():
     if os.path.exists(CONFIG_FILE):
