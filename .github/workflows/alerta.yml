@@ -57,8 +57,10 @@ jobs:
           EMAIL_PASS: ${{ secrets.GMAIL_APP_PASSWORD }}
           EMAIL_DEST: ${{ secrets.EMAIL_DEST }}
           MOOMBOX_PASSWORD: ${{ secrets.MOOMBOX_PASSWORD }}
-          WHATSAPP_NUMERO: ${{ secrets.CALLMEBOT_USER }}
-          WHATSAPP_APIKEY: ${{ secrets.CALLMEBOT_KEY }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
+          TWILIO_WHATSAPP_TO: ${{ secrets.TWILIO_WHATSAPP_TO }}
           HORA_SIMULADA: ${{ github.event.inputs.hora_simulada }}
           DATA_SIMULADA: ${{ github.event.inputs.data_simulada }}
           MIN_SIMULADA: ${{ github.event.inputs.min_simulada }}
