@@ -16,8 +16,13 @@ EMAIL_REMETENTE = os.environ.get("EMAIL_USER", "") or "cap00leonardo@gmail.com"
 EMAIL_DESTINATARIO = os.environ.get("EMAIL_DEST", "") or "leonardochor@gmail.com"
 GMAIL_APP_PASSWORD = os.environ.get("EMAIL_PASS", "") or ""
 
-WHATSAPP_NUMERO = os.environ.get("WHATSAPP_NUMERO", "") or os.environ.get("CALLMEBOT_USER", "") or "5521992971444"
-WHATSAPP_APIKEY = os.environ.get("WHATSAPP_APIKEY", "") or os.environ.get("CALLMEBOT_KEY", "") or ""
+# WhatsApp via Twilio (FIX H)
+# TWILIO_FROM: numero do WhatsApp Twilio com prefixo "whatsapp:+", ex "whatsapp:+14155238886" (sandbox)
+# TWILIO_TO: numero do destinatario com prefixo "whatsapp:+", ex "whatsapp:+5521992971444"
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
+TWILIO_WHATSAPP_FROM = os.environ.get("TWILIO_WHATSAPP_FROM", "")
+TWILIO_WHATSAPP_TO = os.environ.get("TWILIO_WHATSAPP_TO", "") or "whatsapp:+5521992971444"
 
 DATA_SIMULADA = os.environ.get("DATA_SIMULADA", "")
 HORA_SIMULADA = os.environ.get("HORA_SIMULADA", "")
@@ -346,21 +351,28 @@ def montar_html(corpo):
     return "<pre style='font-family:monospace'>" + linhas + "</pre>"
 
 def enviar_whatsapp(msg):
+    """Envia WhatsApp via Twilio REST API. Nao bloqueia em caso de falha."""
     if DRY_RUN:
         print("[DRY_RUN] WhatsApp suprimido")
         return
-    if not WHATSAPP_APIKEY:
+    if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_WHATSAPP_FROM and TWILIO_WHATSAPP_TO):
+        # Credenciais incompletas: nao envia mas tambem nao falha o workflow
         return
     try:
-        import urllib.parse
-        url = "https://api.callmebot.com/whatsapp.php?phone=" + WHATSAPP_NUMERO + "&text=" + urllib.parse.quote(msg) + "&apikey=" + WHATSAPP_APIKEY
-        r = requests.get(url, timeout=15)
-        if r.status_code == 200:
-            print(f"WhatsApp enviado para {WHATSAPP_NUMERO}")
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{TWILIO_ACCOUNT_SID}/Messages.json"
+        data = {
+            "From": TWILIO_WHATSAPP_FROM,
+            "To": TWILIO_WHATSAPP_TO,
+            "Body": msg,
+        }
+        r = requests.post(url, data=data, auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN), timeout=15)
+        if r.status_code in (200, 201):
+            print(f"WhatsApp enviado para {TWILIO_WHATSAPP_TO} (Twilio)")
         else:
-            print(f"AVISO WhatsApp: status {r.status_code}")
+            # Twilio retorna JSON com mensagem de erro detalhada
+            print(f"AVISO WhatsApp Twilio: status {r.status_code} - {r.text[:300]}")
     except Exception as e:
-        print(f"ERRO WhatsApp (nao critico): {e}")
+        print(f"ERRO WhatsApp Twilio (nao critico): {e}")
 
 def normalizar_hora(h_str):
     h_str = h_str.strip()
