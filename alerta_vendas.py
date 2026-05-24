@@ -379,6 +379,57 @@ def normalizar_hora(h_str):
     return h_str + ":00" if ":" not in h_str else h_str
 
 def determinar_modo(agora_br):
+    """
+    Determina o modo de execução:
+    - 'oficial': processa alertas e descontos das horas anteriores (backfill)
+    - 'previa': aviso 15min antes do fim da hora atual
+
+    Regra base: minute < 30 → oficial; minute >= 30 → previa.
+
+    FIX H — RECUPERAÇÃO DE HORAS PERDIDAS: Se o cron do GitHub Actions pulou
+    runs (comum em horários de pico), as horas anteriores ficam sem ser
+    processadas. Quando isso acontece, o próximo run cai em "previa" e sai
+    sem fazer nada. Aqui, antes de decidir o modo, verificamos se há horas
+    pendentes de backfill no contador — se sim, forçamos "oficial" pra
+    recuperar essas horas, mesmo que estejamos no minuto >= 30.
+    """
+    if FORCAR_MODO in ("oficial", "previa"):
+        return FORCAR_MODO
+
+    modo_base = "previa" if agora_br.minute >= 30 else "oficial"
+
+    if modo_base == "previa":
+        # Checar se há horas pendentes pra recuperar
+        try:
+            contadores = carregar_contadores()
+            ultima_data = contadores.get("ultima_data_verificada", "")
+            ultima_hora = int(contadores.get("ultima_hora_verificada", -1))
+            data_str = agora_br.strftime("%d/%m/%Y")
+            weekday = agora_br.weekday()
+            grade = get_grade(data_str, weekday)
+            oi = grade["oficial_inicio"]
+            of_ = grade["oficial_fim"]
+            # Hora que deveria ter sido processada por último
+            hora_ref_atual = agora_br.hour - 1
+            # Se o dia mudou OU se há horas oficiais pendentes desde o último processamento
+            if ultima_data != data_str:
+                if oi <= hora_ref_atual <= (of_ - 1):
+                    print(f"FIX H: dia novo ({data_str}) com horas pendentes ({oi}..{hora_ref_atual}). Forçando modo oficial.")
+                    return "oficial"
+            else:
+                # Mesmo dia: ver se faltam horas a processar
+                proxima_hora_a_verificar = ultima_hora + 1
+                if oi <= proxima_hora_a_verificar <= (of_ - 1) and proxima_hora_a_verificar <= hora_ref_atual:
+                    print(f"FIX H: horas oficiais pendentes detectadas ({proxima_hora_a_verificar}..{hora_ref_atual}). Forçando modo oficial.")
+                    return "oficial"
+        except Exception as e:
+            print(f"FIX H: erro ao checar horas pendentes (ignorando): {e}")
+
+    return modo_base
+
+
+def determinar_modo_legacy(agora_br):
+    """Versão antiga — preservada apenas para referência. Não usada."""
     if FORCAR_MODO in ("oficial", "previa"):
         return FORCAR_MODO
     if agora_br.minute >= 30:
@@ -428,10 +479,32 @@ def executar_oficial(agora_br, data_str, weekday, grade):
     hora = agora_br.hour
     oi = grade["oficial_inicio"]
     of_ = grade["oficial_fim"]
-    if not (oi <= hora <= of_):
-        print(f"Oficial fora da janela ({oi}h-{of_}h). Hora atual: {hora}h.")
+
+    # FIX H: permitir backfill mesmo depois do fim da janela oficial.
+    # Se rodar atrasado às 23h, ainda precisamos processar as horas 20 e 21 que
+    # ficaram pendentes. A regra fica: entrar se está dentro da janela OU se
+    # está depois mas ainda no mesmo dia (até meia-noite).
+    if hora < oi:
+        print(f"Oficial fora da janela: ainda nao chegamos no inicio ({oi}h). Hora atual: {hora}h.")
         return
+    if hora > of_:
+        # Depois do fim da janela: só processar se há horas pendentes pra recuperar
+        contadores_tmp = carregar_contadores()
+        ultima_data_tmp = contadores_tmp.get("ultima_data_verificada", "")
+        try:
+            ultima_hora_tmp = int(contadores_tmp.get("ultima_hora_verificada", -1))
+        except Exception:
+            ultima_hora_tmp = -1
+        if ultima_data_tmp == data_str and ultima_hora_tmp >= (of_ - 1):
+            print(f"Oficial: dia ja finalizado (ultima hora processada: {ultima_hora_tmp}). Nada a fazer.")
+            return
+        print(f"FIX H: rodando oficial atrasado ({hora}h, fim era {of_}h) pra recuperar horas pendentes.")
+
     hora_ref_atual = hora - 1
+    # Se estamos depois do fim da janela, limita hora_ref_atual ao último horário oficial válido (of_ - 1)
+    if hora > of_:
+        hora_ref_atual = min(hora_ref_atual, of_ - 1)
+
     if not login():
         print("ABORTANDO oficial: login falhou. Nenhum alerta sera processado nem nenhum desconto aplicado.")
         return
