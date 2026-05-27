@@ -14,14 +14,14 @@
       "nome": "Barra Shopping",
       "perda_por_alerta": 50,
       "premio_inicial": 1500,
-      "saldo_atual": 450
+      "saldo_atual": 400
     },
     "4": {
       "ciclo_inicio": "22/05/2026",
       "nome": "NorteShopping",
       "perda_por_alerta": 50,
       "premio_inicial": 1500,
-      "saldo_atual": 300
+      "saldo_atual": 200
     }
   }
 }
